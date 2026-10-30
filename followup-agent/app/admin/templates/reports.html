@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}质控报表{% endblock %}
+{% block sub %}近 {{ days }} 天的质量痕迹汇总：问答质量 · 草稿质量 · 智能体过程 · 审计标记{% endblock %}
+
+{% block body %}
+{# 窗口切换：链接传参，报表是只读页，用 GET 切换最直观 #}
+<div class="tags" style="margin-bottom:16px">
+  {% for d in (7, 30, 90, 180) %}
+    <a class="pill {{ 'ok' if d == days else 'muted' }}" href="/admin/reports?days={{ d }}">近 {{ d }} 天</a>
+  {% endfor %}
+  <a class="btn btn-sm" style="margin-left:auto" href="/admin/reports/summary.csv?days={{ days }}">导出 CSV</a>
+</div>
+
+{# ---------------- KPI 卡片 ---------------- #}
+<div class="grid grid-4" style="margin-bottom:16px">
+  <div class="kpi">
+    <div class="kpi-label">AI 回答数</div>
+    <div class="kpi-value">{{ report.qa.answers }}</div>
+    <div class="kpi-foot">拒答 {{ report.qa.refusal }} 次（{{ report.qa.refusal_rate }}%）</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">无引用回答率</div>
+    <div class="kpi-value" style="color:{{ '#b42318' if report.qa.no_citation_rate > 10 else '#101828' }}">{{ report.qa.no_citation_rate }}%</div>
+    <div class="kpi-foot">{{ report.qa.no_citation }} 条无引用——重点盯防指标</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">草稿确认率</div>
+    <div class="kpi-value">{{ report.drafts.confirm_rate }}%</div>
+    <div class="kpi-foot">{{ report.drafts.confirmed }} / {{ report.drafts.total }} 张草稿被确认</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">AI 草稿人工修改率</div>
+    <div class="kpi-value" style="color:{{ '#b42318' if report.drafts.modify_rate > 30 else '#101828' }}">{{ report.drafts.modify_rate }}%</div>
+    <div class="kpi-foot">确认时改过节点的草稿 {{ report.drafts.modified_by_human }} 张</div>
+  </div>
+</div>
+
+<div class="grid grid-4" style="margin-bottom:16px">
+  <div class="kpi">
+    <div class="kpi-label">智能体运行</div>
+    <div class="kpi-value">{{ report.agent.runs }}</div>
+    <div class="kpi-foot">平均 {{ report.agent.avg_steps }} 轮 · {{ report.agent.avg_latency_ms }}ms</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">模型越权拦截（blocked）</div>
+    <div class="kpi-value" style="color:{{ '#b42318' if report.agent.blocked_attempts else '#101828' }}">{{ report.agent.blocked_attempts }}</div>
+    <div class="kpi-foot">占工具调用 {{ report.agent.blocked_rate }}%——动态工具解锁在起作用</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">红旗运行 / 升级</div>
+    <div class="kpi-value">{{ report.agent.red_flag_runs }} / {{ report.agent.escalated_runs }}</div>
+    <div class="kpi-foot">红旗识别后真正走升级链路的次数</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">审计标记（有效）</div>
+    <div class="kpi-value">{{ report.marks.total }}</div>
+    <div class="kpi-foot">高危 {{ report.marks.by_level.get('high_risk', 0) }} · 关注 {{ report.marks.by_level.get('watch', 0) }}</div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns:1fr 1fr;margin-bottom:16px">
+  <div class="card">
+    <div class="card-head">
+      <h2 class="card-title">智能体运行状态分布</h2>
+      <p class="card-hint">max_steps=触达轮次上限；handoff=转人工</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>状态</th><th class="num">次数</th><th class="num">占比</th></tr></thead>
+        <tbody>
+        {% for s, n in report.agent.status_dist.items() %}
+          <tr>
+            <td>{{ status_labels.get(s, s) }}</td>
+            <td class="num">{{ n }}</td>
+            <td class="num">{{ ((n / report.agent.runs * 100) | round(1)) if report.agent.runs else 0 }}%</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3" class="empty">窗口内没有智能体运行</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2 class="card-title">草稿确认单漏斗</h2>
+      <p class="card-hint">pending 积压多=医护没看；cancelled 多=草稿质量差</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>状态</th><th class="num">数量</th><th class="num">占比</th></tr></thead>
+        <tbody>
+        {% for s, n in report.agent.confirmations.items() %}
+          <tr>
+            <td>{{ confirm_labels.get(s, s) }}</td>
+            <td class="num">{{ n }}</td>
+            <td class="num">{{ ((n / confirm_total * 100) | round(1)) if confirm_total else 0 }}%</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3" class="empty">窗口内没有创建草稿的确认单</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns:1.4fr 1fr;margin-bottom:16px">
+  <div class="card">
+    <div class="card-head">
+      <h2 class="card-title">工具调用 Top 10</h2>
+      <p class="card-hint">失败率高=工具或上游不稳；耗时长=优先优化对象</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>工具</th><th class="num">次数</th><th class="num">失败率</th><th class="num">平均耗时</th></tr></thead>
+        <tbody>
+        {% for t in report.tools %}
+          <tr>
+            <td class="mono">{{ t.tool }}</td>
+            <td class="num">{{ t.calls }}</td>
+            <td class="num" style="color:{{ '#b42318' if t.fail_rate > 20 else 'inherit' }}">{{ t.fail_rate }}%</td>
+            <td class="num">{{ t.avg_latency_ms }}ms</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="empty">窗口内没有工具调用</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2 class="card-title">模型与提示词版本</h2>
+      <p class="card-hint">回答量的分布——换模型/改提示词前先看这里</p>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>模型</th><th class="num">回答数</th></tr></thead>
+        <tbody>
+        {% for m, n in report.qa.models.items() %}
+          <tr><td class="mono">{{ m }}</td><td class="num">{{ n }}</td></tr>
+        {% else %}
+          <tr><td colspan="2" class="empty">窗口内没有 AI 回答</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="table-wrap" style="margin-top:12px">
+      <table>
+        <thead><tr><th>提示词版本（policy_qa）</th><th class="num">回答数</th></tr></thead>
+        <tbody>
+        {% for v, n in report.qa.prompt_versions.items() %}
+          <tr><td class="mono">{{ v }}</td><td class="num">{{ n }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <h2 class="card-title">草稿明细口径</h2>
+    <p class="card-hint">修改率分母只算「已确认」草稿；节点集合与 AI 原始输出不一致即视为人工修改</p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>随访方案</th><th class="num">草稿数</th></tr></thead>
+      <tbody>
+      {% for p, n in report.drafts.plans.items() %}
+        <tr>
+          <td>{{ p }}</td>
+          <td class="num">{{ n }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="2" class="empty">窗口内没有草稿</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-hint" style="padding:0 14px 14px">
+    全量：{{ report.drafts.total }} 张 · AI 生成 {{ report.drafts.ai_generated }} · 复用 {{ report.drafts.reused }} ·
+    状态 draft {{ report.drafts.by_status.draft }} / confirmed {{ report.drafts.by_status.confirmed }} / cancelled {{ report.drafts.by_status.cancelled }} ·
+    平均确认耗时 {{ report.drafts.avg_confirm_hours }} 小时
+  </div>
+</div>
+{% endblock %}

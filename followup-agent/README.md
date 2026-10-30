@@ -8,7 +8,7 @@ FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT + RAG + function calling + �
 - **阶段 3**：管理后台（知识库管理 / **提示词在线编辑、保存即生效** / 对话审计与高危标记）✅
 - **阶段 4 P1**：自主随访智能体（只读工具链 + 动态工具解锁 + 票据地基 + 工具步骤时间线 + 运行回放审计）✅
 - **阶段 4 P2/P3**：执行循环（5 轮 + 逐轮决策日志）/ 合规校验闸门 / **创建草稿强制中断等人工确认** / 红旗评估与升级 ✅
-- **D6**：质控报表 ⬜（审计页已具备数据面）
+- **D6**：质控报表（六组指标 API + CSV 导出 + 后台 `/admin/reports` 页面）✅
 
 ## 快速启动（开发态，SQLite 零依赖）
 
@@ -104,7 +104,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | POST | `/api/v1/tasks/{id}/cancel` | 取消草稿（已确认不可取消 → 409） | 归属人/管理员 |
 | GET | `/` | **医护问答单页**（web/ 目录，同域托管无 CORS） | 登录后使用 |
 | GET | `/api/v1/kb/citations/{chunk_id}` | 引用片段原文（仅 published 文档） | 登录 |
-| GET | `/api/v1/reports/summary` | 质控汇总（D6） | 管理员 |
+| GET | `/api/v1/reports/summary` | **质控汇总**（`?days=1-365`，六组指标） | 管理员 |
+| GET | `/api/v1/reports/summary.csv` | 质控汇总导出 CSV（带 BOM，Excel 直开） | 管理员 |
+| GET | `/admin/reports` | 质控报表页（KPI + 漏斗 + 工具 Top10，窗口 7/30/90/180 天） | 管理员 Cookie |
 
 ### SSE 事件序列
 
@@ -330,7 +332,7 @@ POST /tasks            → draft ──confirm（人工）──→ confirmed（
 
 ```bash
 uvicorn app.main:app --port 8000 &
-python scripts/smoke_test.py --base-url http://127.0.0.1:8000        # 24 步：接口与页面
+python scripts/smoke_test.py --base-url http://127.0.0.1:8000        # 26 步：接口与页面
 python scripts/trajectory_test.py --base-url http://127.0.0.1:8000   # 三条轨迹：过程与闸门
 ```
 
@@ -343,8 +345,22 @@ python scripts/trajectory_test.py --base-url http://127.0.0.1:8000   # 三条轨
 **前端托管（GET / 单页 + /static/app.js）** →
 **管理后台（staff 登后台被拒 / 接口 403 / 上传 md 切片 / 删除已发布 409 / 提示词保存新版本 / 缺约束 422 / 问答 meta 记录新版本 / 审计筛选疑似 / 标记与撤销 / 各页面渲染 200）** →
 **智能体（SSE 事件完整 / 最终答案只发一个事件 / final_text 无重复 / 回放工具链首个必为
-resolve_patient / 审计入参不含原始住院号 / 他人 run 404）**。
-退出码 0 = 全绿（共 24 步）。每次运行会埋一个唯一编号提问，避免被库里历史文档干扰。
+search_policy / 审计入参不含原始住院号 / 他人 run 404）** →
+**质控报表（六组指标齐全 / days 钳制 422 / staff 403 / CSV 带 BOM / 后台页面渲染 / 越权 403）**。
+退出码 0 = 全绿（共 26 步）。每次运行会埋一个唯一编号提问，避免被库里历史文档干扰。
+
+### D6 质控指标口径（六组）
+
+| 组 | 关键指标 | 口径 |
+|---|---|---|
+| `qa` | 无引用回答率 | 窗口内 assistant 消息（有 meta）：非拒答且 `meta.citations` 为空 ÷ 总回答数 |
+| `qa` | 护栏改写率 | `meta.flags` 出现任一护栏标志（拒答/剔引用/疑似通用知识…）的占比 |
+| `drafts` | 确认率 | `confirmed` ÷ 全部草稿 |
+| `drafts` | **AI 人工修改率** | 已确认草稿中，人定稿的节点集合（offset_days）≠ AI 原始输出（`content.ai.raw_args`）的占比——数量没变但节点改天也算改 |
+| `agent` | blocked 率 | `agent_tool_calls.decision='blocked'` ÷ 工具调用总数（模型试图越权的频率） |
+| `agent` | 确认单漏斗 | pending / confirmed / cancelled / expired 分布 |
+| `tools` | 工具 Top10 | 次数、失败率、平均耗时 |
+| `marks` | 审计标记 | 窗口内未撤销的 high_risk / watch 计数 |
 
 ## 数据模型（12 张表）
 
@@ -406,7 +422,7 @@ followup-agent/
 │   └── services/             # knowledge · chat · qa · task · prompt · audit · doc_parser · agent
 ├── alembic/                  # env.py（URL 从 Settings 注入）+ versions/0001–0004
 ├── docs/agent-trajectories.md  # ★ 三条典型轨迹（含 SSE 与审计行示例）
-├── scripts/smoke_test.py     # 端到端冒烟（24 步）
+├── scripts/smoke_test.py     # 端到端冒烟（26 步）
 ├── scripts/trajectory_test.py  # ★ 三条轨迹的过程断言
 ├── docker-compose.yml        # pgvector/pgvector:pg16（5433）
 └── .env.example
@@ -419,11 +435,9 @@ followup-agent/
 - 单次检索最多扫描 `RAG_MAX_CANDIDATES=5000` 个切片。超过这个量级应改 pgvector HNSW 召回 topN + BM25 重排，
   替换 `app/agents/rag.py::_score_all` 一个函数即可。
 
-## 下一步（D6 + 已知边界）
+## 下一步（已知边界）
 
-- **D6**：质控报表（完成率、红旗升级率、无引用回答占比、**AI 草稿人工修改率**
-  ——基础字段已就位：`messages.meta.flags`、`followup_task_drafts.content.confirm`、
-  `agent_runs.route`、`agent_tool_calls.decision`（可直接统计 blocked 率 = 模型试图跳步的频率））
 - 真实模型联调待新 API Key（mock 下链路已全部验证，含三条轨迹）
 - 升级工单当前只生成编号并落审计（`ESC-xxxxxxxx`），未接院内通知通道/HIS 工单表
 - 规则档位目前内置骨科与冠心病两套（`rules.PLAN_PROFILES`），其他病种走"仅结构校验"并标记 `PROFILE_UNKNOWN`
+- 报表 meta 细粒度统计在 Python 侧聚合（跨 PG/SQLite 无可移植 JSON 语法）；数据量上来后换 PG jsonb 路径，口径不变

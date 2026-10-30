@@ -437,6 +437,59 @@ def main() -> int:
         other_run = c.get(f"/api/v1/agent/runs/{run_uid}", headers={"Authorization": f"Bearer {other_token}"})
         ok &= check(other_run.status_code == 404, f"他人回放 → {other_run.status_code}")
 
+        # ---------------- D6：质控报表 ----------------
+        print("[25] 质控报表 API：六组指标齐全、窗口参数钳制、staff 越权 403")
+        rep = c.get("/api/v1/reports/summary", headers=admin_h, params={"days": 30}).json()
+        ok &= check(
+            {"window", "qa", "drafts", "agent", "tools", "marks"} <= set(rep),
+            f"报表分组={sorted(set(rep) - {'operator', 'window'})}",
+        )
+        ok &= check(
+            {"answers", "no_citation_rate", "models"} <= set(rep["qa"]),
+            f"qa 指标：answers={rep['qa']['answers']} 无引用率={rep['qa']['no_citation_rate']}%",
+        )
+        ok &= check(
+            {"confirm_rate", "modify_rate"} <= set(rep["drafts"]),
+            f"草稿指标：确认率={rep['drafts']['confirm_rate']}% 人工修改率={rep['drafts']['modify_rate']}%",
+        )
+        # 上面 [22] 刚跑过一次智能体，窗口内至少有 1 次运行、至少 1 次 search_policy
+        ok &= check(rep["agent"]["runs"] >= 1, f"agent.runs={rep['agent']['runs']}（含本轮冒烟）")
+        ok &= check(
+            any(t["tool"] == "search_policy" for t in rep["tools"]),
+            f"tools 含 search_policy（共 {len(rep['tools'])} 个工具）",
+        )
+        ok &= check(
+            c.get("/api/v1/reports/summary", headers=admin_h, params={"days": 9999}).status_code == 422,
+            "days=9999 → 422（窗口钳制 1-365 生效）",
+        )
+        ok &= check(
+            c.get("/api/v1/reports/summary", headers={"Authorization": f"Bearer {staff}"}).status_code == 403,
+            "staff 访问报表 → 403（RBAC）",
+        )
+
+        print("[26] 质控报表 CSV 与后台页面：导出带 BOM、页面渲染、越权 403")
+        csv_resp = c.get("/api/v1/reports/summary.csv", headers=admin_h)
+        ok &= check(
+            csv_resp.status_code == 200
+            and csv_resp.content[:3] == b"\xef\xbb\xbf"
+            and b"qa.answers" in csv_resp.content,
+            "CSV → 200，UTF-8 BOM 在，含指标行（Excel 可直接打开）",
+        )
+        c.cookies.set("qh_admin", admin)
+        page = c.get("/admin/reports?days=30")
+        ok &= check(
+            page.status_code == 200 and "质控报表" in page.text and "无引用回答率" in page.text,
+            "GET /admin/reports → 200（KPI 与指标渲染）",
+        )
+        csv_page = c.get("/admin/reports/summary.csv?days=7")
+        ok &= check(
+            csv_page.status_code == 200 and csv_page.content[:3] == b"\xef\xbb\xbf",
+            "后台 Cookie 导出 CSV → 200（无需 Bearer）",
+        )
+        c.cookies.set("qh_admin", staff)
+        ok &= check(c.get("/admin/reports").status_code == 403, "staff 访问报表页 → 403")
+        c.cookies.clear()
+
     print("\n" + ("全部通过 ✅" if ok else "存在失败项 ❌"))
     return 0 if ok else 1
 

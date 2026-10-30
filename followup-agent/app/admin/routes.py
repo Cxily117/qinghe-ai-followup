@@ -653,3 +653,75 @@ async def audit_revoke(request: Request, mark_id: int, db: DbDep, session_id: in
     except AppError as exc:
         return _back(f"/admin/audit/{session_id}", err=str(exc))
     return _back(f"/admin/audit/{session_id}", msg="已撤销标记（记录保留，撤销人已留痕）")
+
+
+# ------------------------------------------------------------------ 质控报表
+
+
+REPORT_STATUS_LABELS = {
+    "running": "运行中",
+    "succeeded": "成功",
+    "refused": "拒答",
+    "handoff": "已转人工",
+    "max_steps": "达轮次上限",
+    "failed": "失败",
+    "pending_confirm": "待确认草稿",
+    "confirmed": "草稿已确认",
+    "cancelled": "已取消",
+    "expired": "确认已过期",
+}
+CONFIRM_LABELS = {
+    "pending": "待确认",
+    "confirmed": "已确认",
+    "cancelled": "已取消",
+    "expired": "已过期",
+}
+
+
+@router.get("/admin/reports", response_class=HTMLResponse)
+async def reports_page(request: Request, db: DbDep):
+    user, blocked = await _guard(request, db)
+    if blocked:
+        return blocked
+
+    from app.services import report_service
+
+    qp = request.query_params
+    days = int(qp["days"]) if (qp.get("days") or "").isdigit() and int(qp["days"]) <= 365 else 30
+    data = await report_service.summary(db, days=days)
+
+    confirm_dist = data["agent"]["confirmations"]
+    return _render(
+        request,
+        "reports.html",
+        user=user,
+        nav="reports",
+        days=days,
+        report=data,
+        confirm_total=sum(confirm_dist.values()),
+        status_labels=REPORT_STATUS_LABELS,
+        confirm_labels=CONFIRM_LABELS,
+    )
+
+
+@router.get("/admin/reports/summary.csv")
+async def reports_csv(request: Request, db: DbDep):
+    """CSV 导出走后台 Cookie 鉴权：浏览器直接下载，不需要把 token 暴露给页面 JS。"""
+    user, blocked = await _guard(request, db)
+    if blocked:
+        return blocked
+
+    from fastapi import Response
+
+    from app.services import report_service
+
+    qp = request.query_params
+    days = int(qp["days"]) if (qp.get("days") or "").isdigit() and int(qp["days"]) <= 365 else 30
+    data = await report_service.summary(db, days=days)
+    csv_text = report_service.to_csv(data)
+    # 加 BOM：Excel（尤其中文环境）没 BOM 会把 UTF-8 当 GBK 读出乱码
+    return Response(
+        content=b"\xef\xbb\xbf" + csv_text.encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="qc-report-{days}d.csv"'},
+    )
