@@ -38,6 +38,28 @@ uvicorn app.main:app --port 8000
 
 > 注意：**换了 embedding 模型或改过 `EMBED_DIM` 之后，必须重建知识库切片**，
 > 否则新旧向量不同空间，检索会给出无意义结果（代码会检测维度不一致并显式报错）。
+>
+> ```bash
+> python scripts/reindex_embeddings.py --all      # 用当前 embedding 重算全部切片向量
+> python scripts/reindex_embeddings.py --dry-run  # 先看会动哪些切片
+> ```
+
+**已接入的真实模型（2026-10-30 验证）**：智谱 `glm-4-flash` + `embedding-3`（1024 维），
+对话与向量化共用一个 Key。启动日志会打印生效配置（provider / model / base / key 是否就位），
+排障时先看这一行。
+
+### 真实模型下必须靠代码兜住的三件事
+
+mock 不会幻觉、不会自作主张，所以这些坑只在接真模型后暴露，都已在代码里做确定性拦截：
+
+| 风险 | 真实表现 | 拦截点 |
+|---|---|---|
+| **节点外推** | 问「第 45 天要做什么」，条文只写了 3/7/30 天，模型顺口编出一套并标引用 | `guardrails.detect_node_extrapolation`：问题问的时点不在任何检索条文中 → 强制改写成「未查询到相关内容」并列出制度实际覆盖的节点 |
+| **编造患者标识** | 「出院后第 7 天打电话」这种没有患者信息的请求，模型自己给出 `P123456` 并建草稿 | `task_service._grounded`：模型给的标识必须在原始对话里原样出现过，否则丢弃并 422 |
+| **长答案夹带医学建议** | 模型主动补「建议服用 XX、剂量 YY」 | `guardrails.contains_medical_advice`：命中即打 `medical_advice_suspected` 并追加免责，绝不改写结论 |
+
+`scripts/trajectory_test.py` 断言的是 mock 的固定工具序列，接真模型后会自动跳过
+（真实模型可能合理走别的路径），需要时用 `--force` 强制跑。
 
 ## 生产态（PostgreSQL 16 + pgvector）
 
@@ -423,7 +445,8 @@ followup-agent/
 ├── alembic/                  # env.py（URL 从 Settings 注入）+ versions/0001–0004
 ├── docs/agent-trajectories.md  # ★ 三条典型轨迹（含 SSE 与审计行示例）
 ├── scripts/smoke_test.py     # 端到端冒烟（26 步）
-├── scripts/trajectory_test.py  # ★ 三条轨迹的过程断言
+├── scripts/trajectory_test.py  # ★ 三条轨迹的过程断言（真实模型下自动跳过）
+├── scripts/reindex_embeddings.py # ★ 换 embedding 后重建切片向量
 ├── docker-compose.yml        # pgvector/pgvector:pg16（5433）
 └── .env.example
 ```
@@ -437,7 +460,8 @@ followup-agent/
 
 ## 下一步（已知边界）
 
-- 真实模型联调待新 API Key（mock 下链路已全部验证，含三条轨迹）
+- 真实模型已接入并验证（智谱 glm-4-flash + embedding-3）；Key 只存在本地 `.env`（已 gitignore），
+  轮换时改 `.env` 重启即可，无需改代码
 - 升级工单当前只生成编号并落审计（`ESC-xxxxxxxx`），未接院内通知通道/HIS 工单表
 - 规则档位目前内置骨科与冠心病两套（`rules.PLAN_PROFILES`），其他病种走"仅结构校验"并标记 `PROFILE_UNKNOWN`
 - 报表 meta 细粒度统计在 Python 侧聚合（跨 PG/SQLite 无可移植 JSON 语法）；数据量上来后换 PG jsonb 路径，口径不变

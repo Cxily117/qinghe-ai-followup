@@ -111,7 +111,9 @@ async def preview_prompt(name: str, payload: PromptPreviewIn, admin: AdminUser, 
     )
     messages, _ = build_messages(payload.question, hits, None, prompt=draft)
     result = await get_llm().chat(messages)
-    answer, citations, flags = guardrails.apply_output_guardrails(result.text, len(hits))
+    answer, citations, flags = guardrails.apply_output_guardrails(
+        result.text, len(hits), question=payload.question, sources=[h.content for h in hits]
+    )
 
     return {
         "ok": True,

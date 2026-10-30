@@ -81,6 +81,10 @@ class RunState:
     # 检索登记表：一次运行内跨多次 search_policy 连续编号，
     # 否则模型查两轮后 [1] 指哪条就说不清，引用会串。
     citations: list[dict] = field(default_factory=list)
+    # 检索到的条文正文（护栏做「节点外推拦截」时要比对：问题问的时点在不在条文里）。
+    # 与 citations 分开存：citations 只有 preview（给前端展示引用卡片），
+    # 判定需要更完整的正文，否则 600 字之外的节点会被误判成"条文里没有"。
+    retrieved_texts: list[str] = field(default_factory=list)
 
     def touch(self, tool: str) -> None:
         self.route.append(tool)

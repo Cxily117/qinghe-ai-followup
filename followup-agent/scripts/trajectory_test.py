@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 import httpx
 
@@ -92,7 +93,32 @@ def main() -> int:
     ap.add_argument("--admin", default="demo_admin")
     ap.add_argument("--nurse", default="demo_nurse")
     ap.add_argument("--password", default="Passw0rd!")
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="即使接了真实模型也照跑（真实模型的工具序列不保证与预期完全一致）",
+    )
     args = ap.parse_args()
+
+    # 这个脚本断言的是「mock 脚本化路径」的固定序列，属于回归测试。
+    # 接上真实模型后模型可能合理走别的路径（比如多检索一次），断言就不再有意义，
+    # 此时自动跳过并说明原因，而不是把正常行为报成失败。
+    try:
+        # 脚本以 scripts/ 为工作目录运行，sys.path 里没有项目根 → 手动补上，
+        # 否则 import 失败会被误判成 mock，导致该跳过时没跳过
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from app.core.config import get_settings
+
+        provider = get_settings().llm_provider
+    except Exception as exc:  # 读不到配置就按 mock 处理（老环境仍可跑）
+        print(f"（无法读取配置，按 mock 处理：{exc}）")
+        provider = "mock"
+    if provider != "mock" and not args.force:
+        print(
+            f"跳过：当前 LLM_PROVIDER={provider}（真实模型），"
+            "固定工具序列断言仅对 mock 有效。如需强制运行请加 --force。"
+        )
+        return 0
 
     ok = True
     with httpx.Client(base_url=args.base_url.rstrip("/"), timeout=120) as c:

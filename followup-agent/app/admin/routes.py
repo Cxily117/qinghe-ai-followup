@@ -530,7 +530,9 @@ async def prompts_preview(
         )
         messages, _ = build_messages(question, hits, None, prompt=draft)
         result = await get_llm().chat(messages)
-        answer, citations, flags = guardrails.apply_output_guardrails(result.text, len(hits))
+        answer, citations, flags = guardrails.apply_output_guardrails(
+            result.text, len(hits), question=question, sources=[h.content for h in hits]
+        )
         preview = {
             "ok": True,
             "answer": answer,

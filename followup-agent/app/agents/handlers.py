@@ -140,6 +140,8 @@ def _register_hits(state: RunState, hits: list) -> list[dict]:
                 "preview": h.preview,
             }
         )
+        # 正文单独留一份，供输出护栏核对「问的时点是否真在条文里」
+        state.retrieved_texts.append(h.content)
     return items
 
 

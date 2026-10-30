@@ -234,7 +234,10 @@ async def stream_agent_events(
             answer, citations, flags = final_text, [], {}
         else:
             answer, citations, flags = apply_output_guardrails(
-                final_text, len(state.citations)
+                final_text,
+                len(state.citations),
+                question=question,
+                sources=state.retrieved_texts,
             )
 
         merged_flags = dict(flags)

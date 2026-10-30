@@ -34,6 +34,24 @@ ADMIN_STATIC = Path(__file__).resolve().parent / "admin" / "static"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 启动自检：把真正生效的模型配置打出来。
+    # "大模型连接失败" 这类报障，第一件事就是确认供应商/模型/base/key 到没到位——
+    # 有这行日志，不用翻 .env 也不用猜。
+    s = get_settings()
+    key_state = f"已配置（{s.llm_api_key[:6]}…，{len(s.llm_api_key)} 位）" if s.llm_api_key else "❌ 未配置"
+    logger.warning(
+        "LLM 配置：provider=%s model=%s base=%s key=%s | embedding=%s/%s(%d 维)",
+        s.llm_provider,
+        s.llm_chat_model,
+        s.llm_api_base or "(默认)",
+        key_state,
+        s.embed_provider,
+        s.embed_model,
+        s.embed_dim,
+    )
+    if s.llm_provider == "openai" and not s.llm_api_key:
+        logger.warning("LLM_PROVIDER=openai 但 LLM_API_KEY 为空，问答会直接失败")
+
     # 启动时播种提示词：库里没有生效版本，问答就会拿空提示词去调模型
     try:
         async with SessionLocal() as db:

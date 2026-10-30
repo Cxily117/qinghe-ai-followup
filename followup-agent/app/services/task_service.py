@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import select
@@ -28,6 +29,21 @@ logger = logging.getLogger(__name__)
 
 MAX_ITEMS = 10
 MAX_OFFSET_DAYS = 365
+
+_SPACE_RE = re.compile(r"[\s\-—－_]")
+
+
+def _squash(text: str) -> str:
+    """去掉空白与连字符并统一大写，用于"这个标识是否真实出现过"的比对。"""
+    return _SPACE_RE.sub("", text or "").upper()
+
+
+def _grounded(value: str, sources: list[str]) -> bool:
+    """value 是否原样出现在任一来源文本里（忽略空格/连字符/大小写差异）。"""
+    needle = _squash(value)
+    if not needle:
+        return False
+    return any(needle in _squash(s) for s in sources)
 DEFAULT_PLAN = "常规术后随访"
 VALID_CHANNELS = {"phone", "sms", "wecom", "outpatient"}
 SCHEDULE_HOUR = 9  # 随访任务统一排在上午 9 点，避免出现 03:17 这种没人执行的计划
@@ -237,9 +253,31 @@ async def generate_draft(
             "模型没有按要求调用任务生成工具" + (f"（它回复了：{result.text[:120]}）" if result.text else "")
         )
 
-    normalized = normalize(call.arguments, base_date=base, patient_hint=patient_ref)
-    offsets = [i["offset_days"] for i in normalized["items"]]
+    # ---- 患者标识必须"有出处" ----
+    # 真实模型（glm-4-flash）在对话里没有患者标识时会自己编一个（实测过 P123456），
+    # 而"抽不到就拒绝"如果是靠模型自觉，这条硬约束就等于没有。
+    # 所以在这里做确定性回查：模型给的标识必须在原始对话/入参里真实出现过，
+    # 否则一律丢弃——宁可直接 422 让医护补，也不写一个编造的住院号进库。
+    args = dict(call.arguments or {})
+    extracted = str(args.get("patient_ref") or "").strip()
+    hallucinated = ""
+    if extracted and extracted != (patient_ref or "").strip():
+        haystack = [question or ""] + [
+            str(m.get("content") or "") for m in history if m.get("role") != "assistant"
+        ]
+        if not _grounded(extracted, haystack):
+            hallucinated = extracted
+            args["patient_ref"] = ""  # 丢弃无出处的标识，退回"必须由人补充"
 
+    if hallucinated and not (patient_ref or "").strip():
+        # 先抛这条：否则 normalize 只会报"缺患者标识"，看不出是模型编造过
+        raise TaskInputError(
+            f"没能从对话里识别到患者标识（模型给出了 {hallucinated}，但对话里没有出现过，已拒绝采用）。"
+            "请补充患者标识后重试，系统不会替你编一个。"
+        )
+
+    normalized = normalize(args, base_date=base, patient_hint=patient_ref)
+    offsets = [i["offset_days"] for i in normalized["items"]]
     existing = await _find_similar_draft(
         db,
         user_id=user_id,

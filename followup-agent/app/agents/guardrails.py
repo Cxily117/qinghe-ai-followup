@@ -45,6 +45,20 @@ RED_FLAG_KEYWORDS = (
 
 DISCLAIMER = "（以上为制度条文摘要，不构成诊疗建议；具体处置请以专科医生意见为准。）"
 
+# ---- 节点外推拦截 ----
+# 真实模型（glm-4-flash）在 mock 时代暴露不出的问题上会翻车：问「第 45 天要做什么」，
+# 条文里只写了 3/7/30 天，它会顺着"随访节奏"编出一套看起来很像的答案，还标着引用。
+# 这类幻觉最危险——格式完全合规，只有懂业务的人才能看出时点是编的。
+# 所以这里做确定性判定：问题明确问某天，而所有检索到的条文里都没有这个天数 → 强制拒答。
+_NODE_IN_QUESTION = re.compile(r"(?:术后|出院后|第)\s*(\d{1,3})\s*(?:天|日)")
+_NODE_IN_SOURCE = re.compile(r"(\d{1,3})\s*(?:天|日)")
+# 只有"问询型"提问才拦：问「哪些/需要/怎么安排」是查制度；
+# 「术后第 5 天想散步可以吗」是在描述患者现状，不该被当成查节点。
+_ASK_HINTS = (
+    "哪些", "什么", "几次", "几个", "项目", "内容", "需要", "安排",
+    "做什么", "怎么", "何时", "什么时候", "多久", "几天",
+)
+
 _CITATION_RE = re.compile(r"\[(\d{1,2})\]")
 
 # 模型有时不用 [2] 而写成「根据资料【资料2】」——语义上就是引用，先归一化再解析，
@@ -90,8 +104,50 @@ def contains_medical_advice(text: str) -> bool:
     return any(re.search(p, text) for p in MEDICAL_ADVICE_PATTERNS)
 
 
-def apply_output_guardrails(answer: str, n_sources: int) -> tuple[str, list[int], dict]:
+def detect_node_extrapolation(
+    question: str, sources: list[str], answer: str
+) -> tuple[list[int], list[int]] | None:
+    """检测「问的时点在条文里根本不存在，模型却答了」。
+
+    返回 (缺失的节点列表, 条文中实际覆盖的节点列表)，不需要拦截时返回 None。
+
+    判定逻辑刻意保守（宁可少拦，不可误伤临床提问）：
+      1. 问题里没出现「术后/出院后/第 N 天」→ 不拦；
+      2. 不是问询型（没有"哪些/需要/怎么"等）→ 不拦，如"术后第 5 天想散步可以吗"；
+      3. 每个被问到的天数都能在条文里找到 → 不拦。
+    """
+    if not question or not sources:
+        return None
+    if not any(h in question for h in _ASK_HINTS):
+        return None
+
+    asked = {int(n) for n in _NODE_IN_QUESTION.findall(question)}
+    if not asked:
+        return None
+
+    blob = "\n".join(sources)
+    covered = {int(n) for n in _NODE_IN_SOURCE.findall(blob)}
+    missing = sorted(asked - covered)
+    if not missing:
+        return None
+    # 只在"答案确实在讲这些时点"时拦；答案本身已拒答则不用管（上面已处理）
+    return missing, sorted(covered)
+
+
+def apply_output_guardrails(
+    answer: str,
+    n_sources: int,
+    *,
+    question: str = "",
+    sources: list[str] | None = None,
+) -> tuple[str, list[int], dict]:
     """对模型输出做确定性收口。
+
+    参数：
+        answer    模型原文
+        n_sources 检索到的资料条数（引用编号上限）
+        question  用户原始问题（可选：用于节点外推拦截）
+        sources   检索到的条文正文列表（可选：同上）
 
     返回 (清洗后的回答, 有效引用编号列表, 供 meta 落库的 flags)。
     """
@@ -105,6 +161,27 @@ def apply_output_guardrails(answer: str, n_sources: int) -> tuple[str, list[int]
         cleaned = strip_citations(answer)
         flags["refusal"] = True
         return cleaned or "该问题超出当前知识库范围。", [], flags
+
+    # 节点外推拦截（优先级高于引用清洗：编出来的答案不该带着引用出门）
+    extrapolated = detect_node_extrapolation(question, sources or [], answer)
+    if extrapolated:
+        nodes, covered = extrapolated
+        detail = "、".join(f"第{n}天" for n in nodes)
+        covered_text = (
+            "已发布制度中可查到的节点为 " + "、".join(f"第{n}天" for n in covered) + "。"
+            if covered
+            else ""
+        )
+        flags["refusal"] = True
+        flags["node_not_in_policy"] = nodes
+        flags["extrapolation_blocked"] = True
+        return (
+            f"关于{detail}的随访安排，随访规范中未查询到相关内容。"
+            f"{covered_text}本系统只按制度条文回答，不对未列明的时点做推断；"
+            "如需确认，请查阅制度原文或联系随访管理员。",
+            [],
+            flags,
+        )
 
     citations = extract_citations(answer, n_sources)
     dropped = sorted({int(m) for m in _CITATION_RE.findall(answer)} - set(citations))

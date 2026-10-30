@@ -107,7 +107,9 @@ async def answer_once(
     llm = get_llm()
     result = await llm.chat(messages)
 
-    answer, citations, flags = guardrails.apply_output_guardrails(result.text, len(hits))
+    answer, citations, flags = guardrails.apply_output_guardrails(
+        result.text, len(hits), question=question, sources=[h.content for h in hits]
+    )
     if guardrails.has_red_flag(question):
         flags["red_flag_question"] = True
     latency_ms = int((time.perf_counter() - started) * 1000)
@@ -241,7 +243,9 @@ async def stream_events(
             return
 
         raw = "".join(chunks)
-        answer, citations, flags = guardrails.apply_output_guardrails(raw, len(hits))
+        answer, citations, flags = guardrails.apply_output_guardrails(
+            raw, len(hits), question=question, sources=[h.content for h in hits]
+        )
         if guardrails.has_red_flag(question):
             flags["red_flag_question"] = True
         if answer != raw:

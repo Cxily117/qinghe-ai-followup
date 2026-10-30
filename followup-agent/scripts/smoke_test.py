@@ -420,10 +420,13 @@ def main() -> int:
         replay = c.get(f"/api/v1/agent/runs/{run_uid}", headers={"Authorization": f"Bearer {staff}"}).json()
         tools_used = [t["tool"] for t in replay.get("tool_calls", [])]
         ok &= check(bool(tools_used), f"工具调用链={tools_used}")
-        # 轨迹 A 语义：只问制度时不该去碰业务工具（不解析患者、不校验、不建草稿）
+        # 安全不变式：这是个纯咨询问题，任何情况下都不得出现写工具。
+        # 注意不能断言"只调了 search_policy"——提问里带了住院号，真实模型会先
+        # resolve_patient 再 check_followup_rule，这是正确行为（mock 那条老路径才是只检索）。
+        write_tools = {"create_followup_task_draft", "escalate_to_clinician"}
         ok &= check(
-            tools_used == ["search_policy"],
-            f"仅检索制度，未调用业务工具：{tools_used}",
+            not (set(tools_used) & write_tools),
+            f"未触发任何写操作（写工具闸门生效）：{tools_used}",
         )
         rounds = replay.get("rounds") or []
         ok &= check(
