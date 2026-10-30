@@ -27,3 +27,4 @@ deploy-qinghe/
 # 发布应用的平台内部标记文件
 .wbapp_*.genie
 *.genie
+followup/
