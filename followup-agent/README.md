@@ -48,6 +48,30 @@ uvicorn app.main:app --port 8000
 对话与向量化共用一个 Key。启动日志会打印生效配置（provider / model / base / key 是否就位），
 排障时先看这一行。
 
+### 一个 Key 能不能一直用？能，但要守住四条
+
+1. **只放在 `.env`**。`.env` 已 gitignore，`.env.example` 里只留空占位符 —— Key 不进代码、
+   不进文档、不进提交记录。日志与审计也做了脱敏（`_redact_args` 会先掩码再截断）。
+2. **开发与生产分两个 Key**。不是怕串数据，是为了能单独限额、单独作废：一个泄漏或欠费时，
+   另一个还能跑。已经贴到聊天/截图里的 Key 一律当作已泄漏，去控制台作废重建。
+3. **额度与并发看平台侧**。`glm-4-flash` 本身免费但仍有 QPS 上限，`embedding-3` 按 token 计费。
+   免费额度用尽的表现就是 `429` —— 这时页面上只会显示「大模型连接失败」，别急着改代码。
+4. **换 Key 是一个有顺序的动作**，顺序错了会白折腾：
+
+```bash
+# ① 写新 Key 到 .env（或改环境变量）
+# ② 体检：配置通不通、Key 有没有效、向量维度对不对，一条命令 5 秒出结论
+python scripts/check_llm.py --verbose
+# ③ 只有「换了 embedding 模型 / 改了 EMBED_DIM / 换了向量供应商」才需要重建向量
+python scripts/reindex_embeddings.py --all
+# ④ 重启服务，确认启动日志里 key 显示「已配置」
+uvicorn app.main:app --port 8000
+# ⑤ 最后去旧 Key 的控制台作废
+```
+
+`check_llm.py` 会把 `401 / 402 / 403 / 404 / 429` 各自翻译成一句能直接动手的话，
+并附上游返回的原文，省得对着「连接失败」四个字猜。
+
 ### 真实模型下必须靠代码兜住的三件事
 
 mock 不会幻觉、不会自作主张，所以这些坑只在接真模型后暴露，都已在代码里做确定性拦截：
@@ -445,6 +469,7 @@ followup-agent/
 ├── alembic/                  # env.py（URL 从 Settings 注入）+ versions/0001–0004
 ├── docs/agent-trajectories.md  # ★ 三条典型轨迹（含 SSE 与审计行示例）
 ├── scripts/smoke_test.py     # 端到端冒烟（26 步）
+├── scripts/check_llm.py      # ★ Key/模型体检：配置·对话·向量维度，一条命令出结论
 ├── scripts/trajectory_test.py  # ★ 三条轨迹的过程断言（真实模型下自动跳过）
 ├── scripts/reindex_embeddings.py # ★ 换 embedding 后重建切片向量
 ├── docker-compose.yml        # pgvector/pgvector:pg16（5433）
@@ -461,7 +486,7 @@ followup-agent/
 ## 下一步（已知边界）
 
 - 真实模型已接入并验证（智谱 glm-4-flash + embedding-3）；Key 只存在本地 `.env`（已 gitignore），
-  轮换时改 `.env` 重启即可，无需改代码
+  轮换时改 `.env` → 跑 `scripts/check_llm.py` 体检 → 重启即可，无需改代码
 - 升级工单当前只生成编号并落审计（`ESC-xxxxxxxx`），未接院内通知通道/HIS 工单表
 - 规则档位目前内置骨科与冠心病两套（`rules.PLAN_PROFILES`），其他病种走"仅结构校验"并标记 `PROFILE_UNKNOWN`
 - 报表 meta 细粒度统计在 Python 侧聚合（跨 PG/SQLite 无可移植 JSON 语法）；数据量上来后换 PG jsonb 路径，口径不变
