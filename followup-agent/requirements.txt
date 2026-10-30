@@ -1,0 +1,11 @@
+# 阶段 2（D1–D2）依赖 —— 认证 + ORM + 迁移
+fastapi>=0.115
+uvicorn[standard]>=0.30
+sqlalchemy[asyncio]>=2.0.30
+aiosqlite>=0.20            # 开发态 SQLite 异步驱动
+asyncpg>=0.29              # 生产态 PostgreSQL 异步驱动
+alembic>=1.13
+pgvector>=0.2.5            # 生产态向量列类型
+pydantic-settings>=2.3
+PyJWT>=2.8
+httpx>=0.27

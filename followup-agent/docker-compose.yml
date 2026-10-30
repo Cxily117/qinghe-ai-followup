@@ -1,0 +1,23 @@
+# 生产态数据库：PostgreSQL 16 + pgvector（端口用 5433，避免与本机已装的 PG13 冲突）
+# 用法：docker compose up -d
+# 然后把 .env 的 DATABASE_URL 改为：
+#   postgresql+asyncpg://followup:followup@localhost:5433/followup
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: followup
+      POSTGRES_PASSWORD: followup
+      POSTGRES_DB: followup
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U followup"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

@@ -17,7 +17,24 @@
 | `随访系统架构图.png` | 系统分层架构图 |
 | `随访现状流程图与分析报告.docx` | 流程图 + 三维分析合并报告 |
 | `prototype/` | 阶段 1 RAG 命令行原型（见下） |
+| `followup-agent/` | **阶段 2 FastAPI 工程骨架**（认证/JWT/6 张表/迁移，见下） |
 | `render_*.py` + `*.html` | 流程图/架构图源文件与渲染脚本（可改可重出图） |
+
+## 阶段 2 工程骨架（followup-agent）
+
+FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT，D1–D2 范围。开发态 SQLite 零依赖可跑，生产切 PostgreSQL+pgvector。
+
+```bash
+cd followup-agent
+pip install -r requirements.txt
+alembic upgrade head            # 建 6 张表
+uvicorn app.main:app --reload   # http://127.0.0.1:8000/docs
+```
+
+生产（pgvector）：`docker compose up -d` → `.env` 设 `DATABASE_URL=postgresql+asyncpg://followup:followup@localhost:5433/followup` → `alembic upgrade head`。
+
+已实测（14 项回归全通过）：注册/登录/`/auth/me`、401（错密码/无 token）、403（医护越权访问管理员接口）、501（占位接口）、RBAC 双角色、OpenAPI 文档。
+
 
 ## 阶段 1 原型快速开始
 

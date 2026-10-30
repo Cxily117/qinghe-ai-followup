@@ -9,3 +9,13 @@ _tools/
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+# 本地数据库与密钥（绝不入库）
+*.db
+*.sqlite3
+.env
