@@ -97,6 +97,17 @@ def create_app() -> FastAPI:
     if ADMIN_STATIC.is_dir():
         app.mount("/admin/static", StaticFiles(directory=ADMIN_STATIC), name="admin-static")
 
+    @app.middleware("http")
+    async def _no_cache_admin_html(request, call_next):
+        """后台 HTML 禁缓存：后台发版加了导航项/新页面，若 base.html 被浏览器缓存，
+        用户会一直看到旧侧边栏（"新功能在哪"的又一来源）。静态资源带版本号不受影响。"""
+        response = await call_next(request)
+        if request.url.path.startswith("/admin") and "text/html" in response.headers.get(
+            "content-type", ""
+        ):
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return response
+
     @app.get("/health", tags=["运维"], summary="健康检查")
     async def health():
         return {
