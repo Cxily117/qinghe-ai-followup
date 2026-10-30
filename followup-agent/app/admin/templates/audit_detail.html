@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}会话审计 · {{ detail.session.id }}{% endblock %}
+{% block sub %}{{ detail.user.name }}{% if detail.user.department %}（{{ detail.user.department }}）{% endif %} · 共 {{ detail.messages|length }} 条消息{% endblock %}
+
+{% block body %}
+<div class="grid grid-3-1">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2 class="card-title">{{ detail.session.title }}</h2>
+        <p class="card-hint">
+          会话 #{{ detail.session.id }} ·
+          开始 {{ detail.session.created_at.strftime('%Y-%m-%d %H:%M') if detail.session.created_at else '-' }} ·
+          最后 {{ detail.session.updated_at.strftime('%Y-%m-%d %H:%M') if detail.session.updated_at else '-' }}
+        </p>
+      </div>
+      <a class="btn btn-sm btn-ghost" href="/admin/audit">返回列表</a>
+    </div>
+
+    <div class="thread">
+      {% for m in detail.messages %}
+      <div class="turn">
+        <div class="turn-head">
+          <span>{{ '医护提问' if m.role == 'user' else 'AI 回答' }} · #{{ m.id }} · {{ m.created_at.strftime('%m-%d %H:%M:%S') if m.created_at else '' }}</span>
+          <div class="tags">
+            {% for l in m.flag_labels %}<span class="pill warn">{{ l }}</span>{% endfor %}
+          </div>
+        </div>
+        <div class="bubble {{ 'q' if m.role == 'user' else 'a' }}">{{ m.content }}</div>
+
+        {% if m.role == 'assistant' %}
+          {% if m.citations %}
+          <div class="cite-list">
+            <div style="margin-bottom:4px;color:var(--ink-3)">引用来源</div>
+            {% for c in m.citations %}
+            <div style="padding:3px 0"><b>[{{ c.n }}] {{ c.doc_title }}</b> · {{ c.preview }}</div>
+            {% endfor %}
+          </div>
+          {% endif %}
+          <div class="meta-row">
+            <span>模型 {{ m.model or '-' }}</span>
+            <span>提示词 {{ m.prompt_version or '-' }}</span>
+            <span>耗时 {{ m.latency_ms }} ms</span>
+            {% if m.mark %}<span class="pill danger">本条已标记</span>{% endif %}
+          </div>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="empty">该会话没有消息</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2 class="card-title">审计结论</h2>
+      <p class="card-hint">
+        {% if detail.suspected %}
+        <span class="pill warn">系统预筛：疑似存在风险回答</span>
+        {% else %}
+        <span class="pill ok">系统预筛：未见风险标签</span>
+        {% endif %}
+      </p>
+
+      <form method="post" action="/admin/audit/{{ detail.session.id }}/mark" style="margin-top:14px">
+        <div class="field">
+          <label for="level">标记级别</label>
+          <select class="select" id="level" name="level">
+            {% for k, v in level_labels.items() %}
+            <option value="{{ k }}">{{ v }}{% if k == 'high_risk' %}（病情异常预警类）{% endif %}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="note">定性依据（必填更好追溯）</label>
+          <textarea class="input textarea" id="note" name="note" rows="3"
+                    placeholder="如：医护询问术后发热处理，AI 未提示升级主管医生"></textarea>
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:100%">标记为疑似高危</button>
+      </form>
+      <div class="hint">标记会记录操作人与时间；撤销不会删除记录，只做软撤回。</div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">标记记录</h2>
+      <div style="margin-top:10px">
+        {% for mk in detail.marks %}
+        <div style="padding:10px 0;border-bottom:1px dashed var(--line-soft)">
+          <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+            <span class="pill {{ 'danger' if mk.level == 'high_risk' else 'warn' }}">{{ mk.level_label }}</span>
+            <span class="mono" style="font-size:11.5px;color:var(--ink-3)">{{ mk.created_at.strftime('%m-%d %H:%M') if mk.created_at else '' }}</span>
+          </div>
+          <div style="font-size:12.5px;color:var(--ink-2);margin-top:6px">{{ mk.note or '（未填写依据）' }}</div>
+          <div style="font-size:11.5px;color:var(--ink-3);margin-top:4px">标记人 {{ mk.marked_by }}</div>
+          {% if mk.revoked_at %}
+          <div style="font-size:11.5px;color:var(--danger);margin-top:4px">
+            已于 {{ mk.revoked_at.strftime('%m-%d %H:%M') }} 由 {{ mk.revoked_by }} 撤销
+          </div>
+          {% else %}
+          <form method="post" action="/admin/audit/marks/{{ mk.id }}/revoke" style="margin-top:8px"
+                onsubmit="return confirm('撤销后本条标记不再计入统计，但记录会保留。确认？')">
+            <input type="hidden" name="session_id" value="{{ detail.session.id }}">
+            <button class="btn btn-sm" type="submit">撤销标记</button>
+          </form>
+          {% endif %}
+        </div>
+        {% else %}
+        <div class="hint">还没有人工标记</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}概览{% endblock %}
+{% block sub %}知识库、提示词与问答质量的一屏总览{% endblock %}
+
+{% block body %}
+<div class="grid grid-4" style="margin-bottom:16px">
+  <div class="kpi">
+    <div class="kpi-label">制度文档</div>
+    <div class="kpi-value">{{ doc_total }}</div>
+    <div class="kpi-foot">含草稿与归档版本</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">可检索切片</div>
+    <div class="kpi-value">{{ published_chunks }}</div>
+    <div class="kpi-foot">仅统计已发布文档</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">今日回答</div>
+    <div class="kpi-value">{{ audit.answers_today }}</div>
+    <div class="kpi-foot">累计会话 {{ audit.sessions_total }} 个</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">已标记高危</div>
+    <div class="kpi-value" style="color:{{ '#b42318' if audit.marks_active else '#101828' }}">{{ audit.marks_active }}</div>
+    <div class="kpi-foot">人工确认的审计结论</div>
+  </div>
+</div>
+
+<div class="grid grid-3-1">
+  <div>
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <h2 class="card-title">最近疑似高危会话</h2>
+          <p class="card-hint">由红旗问题、疑似用药建议、无引用作答等标签自动预筛，需人工确认</p>
+        </div>
+        <a class="btn btn-sm" href="/admin/audit?only_flagged=1">全部预警</a>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>会话</th><th>医护</th><th>风险标签</th><th>时间</th><th></th></tr>
+          </thead>
+          <tbody>
+          {% for s in recent %}
+            <tr>
+              <td>
+                <a href="/admin/audit/{{ s.session_id }}">{{ s.title }}</a>
+                {% if s.marked %}<span class="pill danger" style="margin-left:6px">已标记</span>{% endif %}
+              </td>
+              <td>{{ s.user_name }}{% if s.department %}<span class="pill muted" style="margin-left:6px">{{ s.department }}</span>{% endif %}</td>
+              <td><div class="tags">{% for l in s.flag_labels %}<span class="pill warn">{{ l }}</span>{% endfor %}</div></td>
+              <td class="mono">{{ s.updated_at.strftime('%m-%d %H:%M') if s.updated_at else '-' }}</td>
+              <td><a class="btn btn-sm" href="/admin/audit/{{ s.session_id }}">查看</a></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5" class="empty">近 7 日没有触发风险标签的会话</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2 class="card-title">知识库最近更新</h2>
+        <a class="btn btn-sm" href="/admin/kb">管理知识库</a>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>标题</th><th>类型</th><th>版本</th><th class="num">切片</th><th>状态</th></tr></thead>
+          <tbody>
+          {% for d in docs %}
+            <tr>
+              <td><a href="/admin/kb/{{ d.id }}">{{ d.title }}</a></td>
+              <td>{{ d.doc_type }}</td>
+              <td class="mono">v{{ d.version }}</td>
+              <td class="num">{{ d.chunk_count }}</td>
+              <td><span class="pill {{ status_class.get(d.status, 'muted') }}">{{ status_labels.get(d.status, d.status) }}</span></td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5" class="empty">还没有上传任何制度文档</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2 class="card-title">当前生效提示词</h2>
+      <p class="card-hint">问答每次请求都会重新读取，改完下一次提问即生效</p>
+      <div style="margin-top:14px" class="mono">{{ prompt.version_tag }}</div>
+      <div class="hint">
+        {% if prompt.source == 'db' %}来自数据库 v{{ prompt.version }}{% else %}⚠️ 数据库无可用版本，正在使用文件兜底模板{% endif %}
+        · 共 {{ prompt.text|length }} 字
+      </div>
+      <div style="margin-top:14px">
+        <a class="btn btn-sm" href="/admin/prompts">编辑提示词</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">合规红线</h2>
+      <p class="card-hint">这些规则在代码里，改提示词也绕不过</p>
+      <ul class="note-list" style="color:var(--ink-2);margin-top:10px">
+        <li>回答必须引用已发布制度；越界引用编号会被删除</li>
+        <li>拒答时强制清空引用，避免"编造出处"</li>
+        <li>疑似用药建议会追加免责声明并打标</li>
+        <li>已发布文档不能删除，只能归档下架</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -12,12 +12,14 @@ from __future__ import annotations
 
 import logging
 import re
+from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.gateway.embedding import get_embedder
 from app.core.config import get_settings
+from app.core.errors import AppError
 from app.models.kb import KbChunk, KbDocument
 
 logger = logging.getLogger(__name__)
@@ -165,3 +167,98 @@ async def count_published_chunks(db: AsyncSession) -> int:
         ).scalar()
         or 0
     )
+
+
+async def get_document(db: AsyncSession, document_id: int) -> KbDocument:
+    doc = await db.get(KbDocument, document_id)
+    if doc is None:
+        raise AppError("DOC_NOT_FOUND")
+    return doc
+
+
+async def list_documents_page(
+    db: AsyncSession,
+    *,
+    status: str | None = None,
+    q: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> dict:
+    """文档分页列表（带切片数）。API 与后台页面共用，避免两套筛选口径。"""
+    stmt = select(KbDocument)
+    if status:
+        stmt = stmt.where(KbDocument.status == status)
+    if q:
+        stmt = stmt.where(KbDocument.title.contains(q.strip()))
+
+    total = int(
+        (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar() or 0
+    )
+    rows = list(
+        (
+            await db.execute(
+                stmt.order_by(KbDocument.id.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        ).scalars().all()
+    )
+
+    counts = dict(
+        (
+            await db.execute(
+                select(KbChunk.document_id, func.count()).group_by(KbChunk.document_id)
+            )
+        ).all()
+    )
+    for row in rows:
+        # 挂在 ORM 实例上的临时属性，模板直接读 doc.chunk_count
+        setattr(row, "chunk_count", int(counts.get(row.id, 0)))
+
+    return {
+        "items": rows,
+        "total": total,
+        "page": page,
+        "pages": max(1, (total + page_size - 1) // page_size),
+    }
+
+
+async def archive_document(db: AsyncSession, doc: KbDocument) -> KbDocument:
+    """下架：退出检索但保留切片与原文。
+
+    和「删除」分开是有意的。审计要能回答"三个月前那条回答依据的是哪份文件"，
+    文件真删了，引用就变成 404，整条证据链断掉。所以对已发布文档，
+    正确操作是归档而不是删除。
+    """
+    if doc.status == "archived":
+        return doc
+    doc.status = "archived"
+    await db.commit()
+    await db.refresh(doc)
+    logger.info("文档归档：id=%s title=%s", doc.id, doc.title)
+    return doc
+
+
+async def delete_document(db: AsyncSession, doc: KbDocument) -> None:
+    """物理删除（仅限 draft / archived）。
+
+    已发布文档必须先归档：否则正在被检索的制度会突然消失，
+    而依赖它的历史回答还在库里，两边的依据对不上。
+    """
+    if doc.status == "published":
+        raise AppError("DOC_HAS_BEEN_PUBLISHED")
+
+    # SQLite 默认不开外键级联，这里显式删切片，两种方言行为一致
+    await db.execute(delete(KbChunk).where(KbChunk.document_id == doc.id))
+    file_path = doc.file_path
+    await db.delete(doc)
+    await db.commit()
+
+    # 落盘原文一并清掉；失败只记日志——数据库记录已删，文件残留不影响业务
+    if file_path:
+        try:
+            Path(file_path).unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning("删除原文文件失败：%s (%s)", file_path, exc)
+
+    logger.info("文档已删除：id=%s title=%s", doc.id, doc.title)

@@ -13,3 +13,5 @@ python-multipart>=0.0.9    # 知识库文件上传（FormData）
 numpy>=1.26                # 向量运算
 jieba>=0.42                # 中文分词（BM25 那一路）
 rank_bm25>=0.2.2           # BM25 关键词检索
+jinja2>=3.1                # 管理后台服务端渲染模板
+pypdf>=5.0                 # 制度文档 PDF 文本层抽取

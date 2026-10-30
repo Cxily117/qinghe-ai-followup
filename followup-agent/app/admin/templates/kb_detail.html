@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}{{ doc.title }}{% endblock %}
+{% block sub %}文档详情与切片核对：上线前确认每一段切得干净、没有串行{% endblock %}
+
+{% block body %}
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2 class="card-title">{{ doc.title }}</h2>
+      <p class="card-hint">
+        <span class="pill {{ status_class.get(doc.status, 'muted') }}">{{ status_labels.get(doc.status, doc.status) }}</span>
+        <span class="pill muted">{{ doc.doc_type }}</span>
+        <span class="pill muted">v{{ doc.version }}</span>
+        <span style="margin-left:8px">上传于 {{ doc.created_at.strftime('%Y-%m-%d %H:%M') if doc.created_at else '-' }}</span>
+      </p>
+    </div>
+    <div class="tags">
+      {% if doc.status == 'draft' %}
+      <form class="inline-form" method="post" action="/admin/kb/{{ doc.id }}/publish">
+        <button class="btn btn-primary" type="submit">发布并进入检索</button>
+      </form>
+      {% endif %}
+      {% if doc.status == 'published' %}
+      <form class="inline-form" method="post" action="/admin/kb/{{ doc.id }}/archive"
+            onsubmit="return confirm('归档后退出检索，历史引用的原文仍可查看。确认？')">
+        <button class="btn" type="submit">归档下架</button>
+      </form>
+      {% endif %}
+      {% if doc.status in ('draft', 'archived') %}
+      <form class="inline-form" method="post" action="/admin/kb/{{ doc.id }}/delete"
+            onsubmit="return confirm('永久删除该文档及全部切片，无法恢复。确认？')">
+        <button class="btn btn-danger" type="submit">删除</button>
+      </form>
+      {% endif %}
+      <a class="btn btn-ghost" href="/admin/kb">返回列表</a>
+    </div>
+  </div>
+
+  <dl class="detail-list">
+    <dt>切片数量</dt><dd>{{ total }} 段（每段 ≤ 500 字，相邻重叠 50 字）</dd>
+    <dt>原始文件</dt>
+    <dd class="mono" style="font-size:12px">
+      {% if doc.file_path %}{{ doc.file_path }}{% if not file_exists %}<span class="pill warn" style="margin-left:6px">文件已丢失</span>{% endif %}
+      {% else %}未留档{% endif %}
+    </dd>
+    <dt>检索状态</dt>
+    <dd>
+      {% if doc.status == 'published' %}参与检索，医护提问时会命中本文件
+      {% elif doc.status == 'draft' %}不参与检索（草稿），发布后才生效
+      {% else %}不参与检索（已归档），仅用于回溯历史引用{% endif %}
+    </dd>
+  </dl>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2 class="card-title">切片内容</h2>
+      <p class="card-hint">切片是模型真正读到的内容 —— 段落被切断或串行，回答就会跟着错</p>
+    </div>
+    <span class="hint">第 {{ page }} / {{ pages }} 页</span>
+  </div>
+
+  {% for c in chunks %}
+  <div style="border:1px solid var(--line);border-radius:8px;padding:12px 14px;{{ 'margin-top:10px' if not loop.first }}">
+    <div class="hint" style="margin:0 0 6px;display:flex;justify-content:space-between">
+      <span>#{{ c.chunk_index + 1 }}</span>
+      <span>{{ c.token_count }} 字 · chunk_id {{ c.id }}</span>
+    </div>
+    <div style="white-space:pre-wrap;font-size:13px;line-height:1.8;color:var(--ink)">{{ c.content }}</div>
+  </div>
+  {% else %}
+  <div class="empty">该文档没有切片，请检查文件内容是否为空</div>
+  {% endfor %}
+
+  {% if pages > 1 %}
+  <div class="pager">
+    {% if page > 1 %}<a href="/admin/kb/{{ doc.id }}?page={{ page - 1 }}">上一页</a>{% endif %}
+    <span class="cur">{{ page }}</span>
+    {% if page < pages %}<a href="/admin/kb/{{ doc.id }}?page={{ page + 1 }}">下一页</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

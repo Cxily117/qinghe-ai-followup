@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>管理员登录 · 青禾随访</title>
+  <link rel="stylesheet" href="/admin/static/admin.css">
+</head>
+<body>
+<div class="auth">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <span class="brand-mark">青</span>
+      <span><b>青禾随访智能体</b><i>管理后台</i></span>
+    </div>
+
+    <h2>管理员登录</h2>
+
+    {% if err %}<div class="flash err" style="margin:0 0 14px">{{ err }}</div>{% endif %}
+    {% if msg %}<div class="flash ok" style="margin:0 0 14px">{{ msg }}</div>{% endif %}
+
+    <form method="post" action="/admin/login">
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="field">
+        <label for="username">账号</label>
+        <input class="input" id="username" name="username" autocomplete="username" required autofocus>
+      </div>
+      <div class="field">
+        <label for="password">密码</label>
+        <input class="input" id="password" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn btn-primary" type="submit">登录后台</button>
+    </form>
+
+    <div class="auth-foot">
+      医护人员请使用 <a href="/">问答入口</a>；后台仅限系统管理员
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -21,7 +21,7 @@ from app.agents import guardrails
 from app.agents.gateway.base import get_llm
 from app.agents.rag import build_messages, retrieve
 from app.core.database import SessionLocal
-from app.services import chat_service
+from app.services import chat_service, prompt_service
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,9 @@ async def answer_once(
             "latency_ms": latency_ms,
         }
 
-    messages, prompt_version = build_messages(question, hits, history)
+    # 提示词每次从库里取生效版本：管理员改完下一次提问就会用新版（需求要求"立即生效"）
+    prompt = await prompt_service.get_active(db, "policy_qa")
+    messages, prompt_version = build_messages(question, hits, history, prompt=prompt)
     llm = get_llm()
     result = await llm.chat(messages)
 
@@ -199,7 +201,10 @@ async def stream_events(
 
         yield {"type": "citations", "citations": [h.to_citation(n) for n, h in enumerate(hits, 1)]}
 
-        messages, prompt_version = build_messages(question, hits, history)
+        # 与 answer_once 取同一条路径：流式与非流式必须用同一版提示词，否则
+        # 两个入口的回答质量会漂移，质控也说不清"到底哪版在生效"
+        prompt = await prompt_service.get_active(db, "policy_qa")
+        messages, prompt_version = build_messages(question, hits, history, prompt=prompt)
         llm = get_llm()
         model_name = getattr(llm, "model", llm.name)
 

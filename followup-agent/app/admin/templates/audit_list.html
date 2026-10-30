@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}对话审计{% endblock %}
+{% block sub %}按医护人员与时间段检索全部问答，标记疑似高危随访问答{% endblock %}
+
+{% block body %}
+<form class="filters" method="get" action="/admin/audit">
+  <div class="field">
+    <label>医护人员</label>
+    <select class="select" name="user_id">
+      <option value="">全部</option>
+      {% for u in staff %}
+      <option value="{{ u.id }}" {{ 'selected' if filters.user_id == u.id }}>
+        {{ u.full_name or u.username }}{% if u.department %}（{{ u.department }}）{% endif %}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field">
+    <label>开始日期</label>
+    <input class="input" type="date" name="date_from" value="{{ filters.date_from }}">
+  </div>
+  <div class="field">
+    <label>结束日期</label>
+    <input class="input" type="date" name="date_to" value="{{ filters.date_to }}">
+  </div>
+  <div class="field" style="padding-bottom:8px">
+    <label class="check"><input type="checkbox" name="only_flagged" value="1" {{ 'checked' if filters.only_flagged }}> 只看自动预筛疑似</label>
+  </div>
+  <div class="field" style="padding-bottom:8px">
+    <label class="check"><input type="checkbox" name="only_marked" value="1" {{ 'checked' if filters.only_marked }}> 只看已标记</label>
+  </div>
+  <button class="btn btn-primary" type="submit">查询</button>
+  <a class="btn btn-ghost" href="/admin/audit">重置</a>
+  <div style="margin-left:auto;text-align:right;font-size:12.5px;color:var(--ink-3)">
+    共 {{ data.total }} 个会话 · 疑似 {{ data.summary.suspected }} · 已标记 {{ data.summary.marked }}
+  </div>
+</form>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>会话</th><th>医护</th><th class="num">回答数</th>
+          <th>风险标签</th><th>审计状态</th><th>最后活动</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for s in data['items'] %}
+        <tr>
+          <td><a href="/admin/audit/{{ s.session_id }}">{{ s.title }}</a></td>
+          <td>
+            {{ s.user_name }}
+            {% if s.department %}<span class="pill muted" style="margin-left:6px">{{ s.department }}</span>{% endif %}
+          </td>
+          <td class="num">{{ s.messages }}</td>
+          <td>
+            <div class="tags">
+              {% for l in s.flag_labels %}<span class="pill warn">{{ l }}</span>{% else %}
+              <span style="color:var(--ink-3);font-size:12px">无</span>
+              {% endfor %}
+            </div>
+          </td>
+          <td>
+            {% if s.marked %}
+              {% for m in s.marks %}
+              <span class="pill {{ 'danger' if m.level == 'high_risk' else 'warn' }}">{{ m.level_label }}</span>
+              {% endfor %}
+            {% elif s.suspected %}
+              <span class="pill info">待复核</span>
+            {% else %}
+              <span style="color:var(--ink-3);font-size:12px">正常</span>
+            {% endif %}
+          </td>
+          <td class="mono" style="font-size:11.5px">{{ s.updated_at.strftime('%Y-%m-%d %H:%M') if s.updated_at else '-' }}</td>
+          <td><a class="btn btn-sm" href="/admin/audit/{{ s.session_id }}">查看</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="empty">没有符合条件的会话</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if data.pages > 1 %}
+  <div class="pager">
+    <span>第 {{ data.page }} / {{ data.pages }} 页</span>
+    {% if data.page > 1 %}
+    <a href="/admin/audit?page={{ data.page - 1 }}&user_id={{ filters.user_id or '' }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}&only_flagged={{ '1' if filters.only_flagged }}&only_marked={{ '1' if filters.only_marked }}">上一页</a>
+    {% endif %}
+    {% if data.page < data.pages %}
+    <a href="/admin/audit?page={{ data.page + 1 }}&user_id={{ filters.user_id or '' }}&date_from={{ filters.date_from }}&date_to={{ filters.date_to }}&only_flagged={{ '1' if filters.only_flagged }}&only_marked={{ '1' if filters.only_marked }}">下一页</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

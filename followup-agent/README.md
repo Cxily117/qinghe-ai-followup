@@ -1,11 +1,12 @@
-# followup-agent · 阶段 2（D1–D5）
+# followup-agent · 阶段 3（D1–D5 + 管理后台）
 
-FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT + RAG + function calling + 原生 JS 前端。
+FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT + RAG + function calling + 原生 JS 前端 + Jinja2 管理后台。
 
 - **D1–D2**：认证（JWT/PBKDF2）+ RBAC + 6 张表 + 双方言迁移 ✅
 - **D3–D4**：知识库入库（切片→向量化→发布）+ `/chat` 流式 RAG（混合检索 + 护栏 + 溯源落库）✅
 - **D5**：对话生成随访任务草稿（function calling，**AI 只到 draft，confirmed 必须人工点**）✅
-- **D6**：质控报表 ⬜
+- **阶段 3**：管理后台（知识库管理 / **提示词在线编辑、保存即生效** / 对话审计与高危标记）✅
+- **D6**：质控报表 ⬜（审计页已具备数据面）
 
 ## 快速启动（开发态，SQLite 零依赖）
 
@@ -45,6 +46,21 @@ alembic upgrade head          # 自动 CREATE EXTENSION vector + vector(1024) + 
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
+## 后台页面（Jinja2 服务端渲染，仅 admin）
+
+| 路径 | 页面 | 说明 |
+|---|---|---|
+| `GET /admin/login` | 登录 | 表单登录写 HttpOnly Cookie；**staff 在此被拒**并提示去问答端 |
+| `GET /admin` | 概览 | 已发布文档 / 可检索切片 / 近 7 日问答量 / 待复核高危会话 + 最近预警 |
+| `GET /admin/kb` | 知识库 | 上传（md/txt/pdf，拖拽）· 筛选 · 表格行操作（查看/发布/归档/删除） |
+| `GET /admin/kb/{id}` | 文档详情 | 元信息 + 切片列表（可折叠）+ 原文下载 + 发布 |
+| `GET /admin/prompts` | 提示词 | 左侧模板列表 / 右侧编辑器 + 版本历史（可回滚、可看 diff）+ 试跑 |
+| `GET /admin/audit` | 对话审计 | 医护、时间段、仅疑似、仅已标记筛选 + 风险标签 |
+| `GET /admin/audit/{session_id}` | 会话详情 | 逐条问答 + flags + 引用来源 + 右侧标记面板（留操作人痕迹） |
+
+访问控制：Cookie 里的 JWT 校验 `role=admin`；staff 携带有效 token 访问页面 → 403 页并引导至问答端。
+接口层同样由 `require_admin` 兜底，**页面和接口是两道独立闸门**，任何一道都不依赖前端隐藏按钮。
+
 ## 接口清单
 
 | 方法 | 路径 | 说明 | 权限 |
@@ -53,11 +69,24 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | POST | `/api/v1/auth/register` | 注册（演示允许注册 admin） | 公开 |
 | POST | `/api/v1/auth/login` | 登录换取 JWT | 公开 |
 | GET | `/api/v1/auth/me` | 当前用户 | 登录 |
-| POST | `/api/v1/kb/documents` | 上传制度文档（md/txt，自动切片+向量化，落 draft） | 管理员 |
+| POST | `/api/v1/kb/documents` | 上传制度文档（md/txt/**pdf**，自动切片+向量化，落 draft） | 管理员 |
 | POST | `/api/v1/kb/documents/{id}/publish` | 发布（进入检索，旧版自动归档） | 管理员 |
-| GET | `/api/v1/kb/documents` | 文档列表（含切片数） | 管理员 |
+| POST | `/api/v1/kb/documents/{id}/archive` | 归档下架（退出检索，保留切片与原文） | 管理员 |
+| DELETE | `/api/v1/kb/documents/{id}` | 删除（仅 draft/archived；已发布 → 409） | 管理员 |
+| GET | `/api/v1/kb/documents` | 文档列表（状态/关键词筛选 + 分页） | 管理员 |
+| GET | `/api/v1/kb/documents/{id}` | 文档详情 | 管理员 |
 | GET | `/api/v1/kb/documents/{id}/chunks` | 查看切片（核对切片质量） | 管理员 |
 | GET | `/api/v1/kb/stats` | 知识库统计（已发布切片数） | 管理员 |
+| GET | `/api/v1/prompts` | 提示词模板清单（生效版本） | 管理员 |
+| GET | `/api/v1/prompts/{name}` | 模板详情（生效正文 + 版本历史） | 管理员 |
+| PUT | `/api/v1/prompts/{name}` | **保存新版本并立即生效**（缺「引用/拒答」约束 → 422） | 管理员 |
+| POST | `/api/v1/prompts/{name}/rollback` | 回滚（复制旧正文成新版本，版本号不倒退） | 管理员 |
+| POST | `/api/v1/prompts/{name}/preview` | 用草稿提示词试答一条问题（不落库） | 管理员 |
+| GET | `/api/v1/audit/sessions` | 审计列表（医护/时间段/仅疑似/仅已标记） | 管理员 |
+| GET | `/api/v1/audit/sessions/{id}` | 会话明细（消息 + flags + 引用 + 标记） | 管理员 |
+| POST | `/api/v1/audit/sessions/{id}/marks` | **标记疑似高危**（记操作人） | 管理员 |
+| POST | `/api/v1/audit/marks/{id}/revoke` | 撤销标记（软撤回留痕） | 管理员 |
+| GET | `/api/v1/audit/users` | 医护下拉 | 管理员 |
 | POST | `/api/v1/chat` | **SSE 流式**问答 | 登录 |
 | POST | `/api/v1/chat/ask` | 非流式问答（脚本/兜底） | 登录 |
 | POST | `/api/v1/chat/sessions` | 新建会话 | 登录 |
@@ -191,13 +220,36 @@ python scripts/smoke_test.py --base-url http://127.0.0.1:8000
 越权确认 404 → 人工确认 confirmed → 重复确认/取消已确认 409 →
 **错误 envelope（空问题/超长/越权会话的 code 与中文 message）** →
 **引用原文接口（医护可读 published、不存在返回 CHUNK_NOT_FOUND）** →
-**前端托管（GET / 单页 + /static/app.js）**。
+**前端托管（GET / 单页 + /static/app.js）** →
+**管理后台（staff 登后台被拒 / 接口 403 / 上传 md 切片 / 删除已发布 409 / 提示词保存新版本 / 缺约束 422 / 问答 meta 记录新版本 / 审计筛选疑似 / 标记与撤销 / 各页面渲染 200）**。
 退出码 0 = 全绿。每次运行会埋一个唯一编号提问，避免被库里历史文档干扰。
 
-## 数据模型（6 张表）
+## 数据模型（8 张表）
 
-`users` / `sessions` / `messages` / `kb_documents` / `kb_chunks` / `followup_task_drafts`
+前 6 张：`users` / `sessions` / `messages` / `kb_documents` / `kb_chunks` / `followup_task_drafts`
 详见 `随访智能体技术架构方案.md` 第 4 节。
+
+阶段 3 新增 2 张（迁移 `0002`，不改旧表）：
+
+- **`prompt_templates`**：`name` / `version` / `content` / `note` / `is_active` / `content_sha` / `created_by` / `created_at`。
+  `(name, version)` 唯一；同一 `name` 只有一条 `is_active`（服务层事务保证）。
+- **`chat_audit_marks`**：`session_id` / `message_id`(可空) / `level`(`high_risk`|`watch`) / `note` /
+  `marked_by` / `created_at` / `revoked_by` / `revoked_at`。「撤销」是软撤回，记录永不删除。
+
+迁移时写入两版种子：`v1` = 你给的默认模板（生效），`v0` = 原 `policy_qa.md` v3 内容（历史存档）。
+
+## 提示词热生效怎么做的
+
+不靠「改完记得清缓存」这种自觉：
+
+1. `build_messages()` 不再自己读文件，改为**由调用方传入提示词对象**（`PromptSnapshot`）。
+2. `prompt_service.get_active()` 每次问答前查一行生效版本（主键索引，成本可忽略）。
+3. 每轮回答把 `prompt_version` + 正文 `sha256` 前 8 位写进 `messages.meta` ——
+   事后能证明「当时那句回答用的是哪一版提示词」，改模板也不会污染历史记录。
+4. 保存前强校验：≥80 字、必须含「引用」与「拒答」语义，否则 422 `PROMPT_MISSING_RULE` 并指出缺哪条
+   （**默认模板比原 v3 少了用药、红旗升级、防套取三条硬约束，页面会提示但不擅自改你的模板**）。
+5. DB 读不到或内容异常 → 回退文件默认版，页面顶部显示「当前使用兜底模板」。
+6. **回滚 = 用旧正文生成新版本**，不是把旧记录设为 active —— 否则版本序列会倒流，审计说不清。
 
 ## 目录
 
@@ -205,20 +257,24 @@ python scripts/smoke_test.py --base-url http://127.0.0.1:8000
 followup-agent/
 ├── web/                      # ★ 医护问答单页（index.html + static/{app.js,style.css}，无构建）
 ├── app/
-│   ├── main.py               # 挂载 web/ 静态托管 + 注册统一错误处理器
+│   ├── main.py               # 挂载 web/ 与 admin/static、注册统一错误处理器、SSR 模板
+│   ├── admin/                # ★ 管理后台（Jinja2）
+│   │   ├── routes.py         #   页面路由 + Cookie 鉴权 + 表单动作
+│   │   ├── templates/        #   base / login / dashboard / kb_list / kb_detail / prompts / audit_* / error
+│   │   └── static/admin.css
 │   ├── core/                 # config / security(JWT+PBKDF2) / database / deps(RBAC) / errors(统一错误码)
-│   ├── api/v1/               # auth · chat · kb · tasks · reports
-│   ├── models/               # 6 张表 ORM
+│   ├── api/v1/               # auth · chat · kb · tasks · reports · prompts · audit
+│   ├── models/               # 8 张表 ORM（含 prompt_templates / chat_audit_marks）
 │   ├── schemas/              # Pydantic DTO
 │   ├── agents/               # ★ 智能体层
 │   │   ├── gateway/          #   base(抽象，含 chat_tools 契约) · openai_provider · mock_provider · embedding
-│   │   ├── prompts/          #   policy_qa.md · task_extract.md（带版本号，可评审可 diff）
+│   │   ├── prompts/          #   __init__(文件兜底) · policy_qa.md · task_extract.md
 │   │   ├── tools.py          #   function calling 工具 schema（无 status 字段）
-│   │   ├── rag.py            #   混合检索 + 提示词拼装
-│   │   └── guardrails.py     #   输出护栏
-│   └── services/             # knowledge_service · chat_service · qa_service · task_service（编排）
-├── alembic/                  # env.py（URL 从 Settings 注入）+ versions/0001
-├── scripts/smoke_test.py     # 端到端冒烟（16 步 26 项断言）
+│   │   ├── rag.py            #   混合检索 + 提示词拼装（提示词由调用方传入）
+│   │   └── guardrails.py     #   输出护栏 + 红旗关键词
+│   └── services/             # knowledge · chat · qa · task · prompt · audit · doc_parser
+├── alembic/                  # env.py（URL 从 Settings 注入）+ versions/0001,0002
+├── scripts/smoke_test.py     # 端到端冒烟（21 步）
 ├── docker-compose.yml        # pgvector/pgvector:pg16（5433）
 └── .env.example
 ```

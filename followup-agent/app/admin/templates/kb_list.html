@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}随访知识库{% endblock %}
+{% block sub %}上传制度文档 → 自动切片 → 向量化入库 → 发布后才参与检索{% endblock %}
+
+{% block body %}
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2 class="card-title">上传随访规范文档</h2>
+      <p class="card-hint">支持 Markdown / 纯文本 / PDF（PDF 只读取文字层，扫描件请先 OCR）</p>
+    </div>
+  </div>
+  <form method="post" action="/admin/kb/upload" enctype="multipart/form-data">
+    <div class="row">
+      <div class="field grow">
+        <label for="file">文件</label>
+        <input class="input" id="file" name="file" type="file" accept="{{ accept }}" required>
+      </div>
+      <div class="field grow">
+        <label for="title">文档标题（留空取文件名）</label>
+        <input class="input" id="title" name="title" placeholder="如：骨科术后随访规范">
+      </div>
+      <div class="field" style="width:170px">
+        <label for="doc_type">文档类型</label>
+        <select class="select" id="doc_type" name="doc_type">
+          {% for t in doc_types %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <button class="btn btn-primary" type="submit">上传并入库</button>
+      </div>
+    </div>
+    <div class="hint">入库后是「草稿」状态，<b>不会</b>立即参与检索；确认切片无误后点发布。</div>
+  </form>
+</div>
+
+<form class="filters" method="get" action="/admin/kb">
+  <div class="field">
+    <label>状态</label>
+    <select class="select" name="status">
+      <option value="">全部</option>
+      {% for k, v in status_labels.items() %}
+      <option value="{{ k }}" {{ 'selected' if status_filter == k }}>{{ v }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="field grow">
+    <label>标题关键词</label>
+    <input class="input" name="q" value="{{ keyword }}" placeholder="输入标题片段">
+  </div>
+  <button class="btn" type="submit">筛选</button>
+  <a class="btn btn-ghost" href="/admin/kb">重置</a>
+  <div style="margin-left:auto;color:var(--ink-3);font-size:12.5px">共 {{ data.total }} 份文档</div>
+</form>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>标题</th><th>类型</th><th class="num">版本</th><th class="num">切片</th>
+          <th>状态</th><th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for d in data['items'] %}
+        <tr>
+          <td><a href="/admin/kb/{{ d.id }}">{{ d.title }}</a></td>
+          <td>{{ d.doc_type }}</td>
+          <td class="num mono">v{{ d.version }}</td>
+          <td class="num">{{ d.chunk_count }}</td>
+          <td><span class="pill {{ status_class.get(d.status, 'muted') }}">{{ status_labels.get(d.status, d.status) }}</span></td>
+          <td>
+            <div class="tags">
+              <a class="btn btn-sm" href="/admin/kb/{{ d.id }}">查看</a>
+              {% if d.status == 'draft' %}
+              <form class="inline-form" method="post" action="/admin/kb/{{ d.id }}/publish">
+                <button class="btn btn-sm btn-primary" type="submit">发布</button>
+              </form>
+              {% endif %}
+              {% if d.status == 'published' %}
+              <form class="inline-form" method="post" action="/admin/kb/{{ d.id }}/archive"
+                    onsubmit="return confirm('归档后该文档将退出检索，历史回答的引用仍可查看。确认归档？')">
+                <button class="btn btn-sm" type="submit">归档</button>
+              </form>
+              {% endif %}
+              {% if d.status in ('draft', 'archived') %}
+              <form class="inline-form" method="post" action="/admin/kb/{{ d.id }}/delete"
+                    onsubmit="return confirm('将永久删除该文档及其全部切片，无法恢复。确认删除？')">
+                <button class="btn btn-sm btn-danger" type="submit">删除</button>
+              </form>
+              {% else %}
+              <button class="btn btn-sm" disabled title="已发布文档不能删除，请先归档">删除</button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="empty">没有符合条件的文档</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if data.pages > 1 %}
+  <div class="pager">
+    <span>第 {{ data.page }} / {{ data.pages }} 页</span>
+    {% if data.page > 1 %}
+    <a href="/admin/kb?page={{ data.page - 1 }}&status={{ status_filter }}&q={{ keyword }}">上一页</a>
+    {% endif %}
+    {% if data.page < data.pages %}
+    <a href="/admin/kb?page={{ data.page + 1 }}&status={{ status_filter }}&q={{ keyword }}">下一页</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

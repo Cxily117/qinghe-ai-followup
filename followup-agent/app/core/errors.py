@@ -19,7 +19,7 @@ import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger(__name__)
@@ -36,9 +36,21 @@ ERRORS: dict[str, tuple[int, str]] = {
     "DRAFT_NOT_FOUND": (404, "草稿不存在或无权访问"),
     "CHUNK_NOT_FOUND": (404, "引用片段不存在，或所属文档已归档"),
     "DOC_NOT_FOUND": (404, "文档不存在"),
+    "PROMPT_NOT_FOUND": (404, "提示词模板或指定版本不存在"),
+    "MARK_NOT_FOUND": (404, "标记记录不存在或已撤销"),
     # 入参
     "QUESTION_EMPTY": (422, "问题不能为空"),
     "QUESTION_TOO_LONG": (422, "问题最多 2000 字，请精简后再问"),
+    "PROMPT_NAME_INVALID": (422, "不支持的提示词模板名"),
+    "PROMPT_TOO_SHORT": (422, "提示词太短（至少 80 字），请写清约束后再保存"),
+    "PROMPT_TOO_LONG": (422, "提示词最多 8000 字"),
+    "PROMPT_MISSING_RULE": (422, "提示词缺少关键约束"),
+    "PDF_NO_TEXT": (422, "PDF 中未提取到文字（可能是扫描件），请先做 OCR 或上传文字版"),
+    "PDF_PARSE_ERROR": (422, "PDF 解析失败，文件可能已损坏"),
+    "UNSUPPORTED_FORMAT": (415, "仅支持 .md / .markdown / .txt / .pdf 格式"),
+    "FILE_TOO_LARGE": (413, "文件超过 2MB 上限"),
+    # 状态冲突
+    "DOC_HAS_BEEN_PUBLISHED": (409, "已发布文档不能直接删除，请先归档下架"),
     "VALIDATION_ERROR": (422, "请求参数不合法"),
     "CONFLICT": (409, "当前状态不允许该操作"),
     # 上游与服务
@@ -71,6 +83,12 @@ FIELD_LABELS = {
     "password": "密码",
     "file": "文件",
     "title": "文档标题",
+    "content": "提示词正文",
+    "note": "修改说明",
+    "name": "模板名",
+    "level": "标记级别",
+    "doc_type": "文档类型",
+    "status_filter": "状态筛选",
 }
 
 # Pydantic 错误类型 → 中文描述
@@ -140,6 +158,31 @@ def _has_chinese(text: str) -> bool:
     return any("\u4e00" <= ch <= "\u9fff" for ch in text)
 
 
+def _wants_admin_html(request: Request) -> bool:
+    """/admin 下的浏览请求要的是页面，不是 JSON。
+
+    判据用 Accept 头而不是路径前缀：接口调用（curl / 冒烟脚本）默认不带
+    text/html，仍然拿到 envelope；浏览器地址栏访问才会走 HTML。
+    """
+    return request.url.path.startswith("/admin") and "text/html" in (
+        request.headers.get("accept") or ""
+    )
+
+
+def _admin_error_page(status_code: int, message: str, request_id: str) -> HTMLResponse:
+    """后台页面的错误页：保留后台的视觉风格，不把用户甩到一个裸 404。"""
+    html = f"""<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>{status_code} · 青禾随访</title>
+<link rel="stylesheet" href="/admin/static/admin.css"></head>
+<body><div class="auth"><div class="error-box">
+<div class="error-code">{status_code}</div>
+<div class="error-msg">{message}</div>
+<div class="error-hint">请求编号 {request_id}，可凭此定位日志</div>
+<a class="btn btn-primary" href="/admin">回到后台首页</a>
+</div></div></body></html>"""
+    return HTMLResponse(content=html, status_code=status_code)
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """在 create_app() 里调用一次。
 
@@ -160,6 +203,8 @@ def register_exception_handlers(app: FastAPI) -> None:
         # 5xx 才算异常；业务性 4xx 只记 info，避免日志被正常的"会话不存在"刷满
         log = logger.error if exc.status_code >= 500 else logger.info
         log("[%s] %s %s -> %s", rid, request.method, request.url.path, exc.code)
+        if _wants_admin_html(request):
+            return _admin_error_page(exc.status_code, exc.message, rid)
         return JSONResponse(
             status_code=exc.status_code,
             content=_body(exc.code, exc.message, rid, exc.extra),
@@ -182,6 +227,8 @@ def register_exception_handlers(app: FastAPI) -> None:
         message = detail if detail and _has_chinese(detail) else ERRORS.get(
             code, (exc.status_code, "请求失败")
         )[1]
+        if _wants_admin_html(request):
+            return _admin_error_page(exc.status_code, message, rid)
         return JSONResponse(
             status_code=exc.status_code,
             content=_body(code, message, rid),

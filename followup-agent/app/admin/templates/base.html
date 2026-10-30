@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}管理后台{% endblock %} · 青禾随访</title>
+  <link rel="stylesheet" href="/admin/static/admin.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">青</span>
+      <span class="brand-text"><b>青禾随访</b><i>管理后台</i></span>
+    </div>
+    <nav class="nav">
+      <a class="nav-item {{ 'is-on' if nav == 'dashboard' }}" href="/admin"><span class="dot"></span>概览</a>
+      <a class="nav-item {{ 'is-on' if nav == 'kb' }}" href="/admin/kb"><span class="dot"></span>随访知识库</a>
+      <a class="nav-item {{ 'is-on' if nav == 'prompts' }}" href="/admin/prompts"><span class="dot"></span>提示词模板</a>
+      <a class="nav-item {{ 'is-on' if nav == 'audit' }}" href="/admin/audit"><span class="dot"></span>对话审计</a>
+    </nav>
+    <div class="side-note">
+      <div class="side-note-title">医护入口</div>
+      <a href="/" target="_blank">问答页 ↗</a>
+      <div style="margin-top:6px">问答端只对医护开放，管理员账号同样可用</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <h1>{{ self.title() }}</h1>
+        <p class="sub">{% block sub %}{% endblock %}</p>
+      </div>
+      <div class="who">
+        <div>
+          <div class="who-name">{{ user.full_name or user.username }}</div>
+          <div style="text-align:right"><span class="who-role">系统管理员</span></div>
+        </div>
+        <form method="post" action="/admin/logout" class="inline-form">
+          <button class="btn btn-ghost btn-sm" type="submit">退出</button>
+        </form>
+      </div>
+    </header>
+
+    {% if msg %}<div class="flash ok">{{ msg }}</div>{% endif %}
+    {% if err %}<div class="flash err">{{ err }}</div>{% endif %}
+
+    <main class="content">
+      {% block body %}{% endblock %}
+    </main>
+  </div>
+</div>
+</body>
+</html>

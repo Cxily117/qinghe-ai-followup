@@ -22,7 +22,7 @@ from app.agents.prompts import load_prompt
 from app.agents.tools import CREATE_TASK_DRAFT, CREATE_TASK_DRAFT_NAME
 from app.models.task import FollowupTaskDraft
 from app.schemas.task import TaskConfirmIn
-from app.services import chat_service
+from app.services import chat_service, prompt_service
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +46,17 @@ class TaskExtractError(RuntimeError):
 
 
 def _build_messages(
-    history: list[dict], question: str | None, patient_hint: str | None, base_date: date
+    history: list[dict],
+    question: str | None,
+    patient_hint: str | None,
+    base_date: date,
+    prompt=None,
 ) -> tuple[list[dict], str]:
-    prompt = load_prompt("task_extract")
+    # prompt 由调用方从 prompt_service 取（库内生效版本），None 时回退文件版
+    if prompt is None:
+        prompt = load_prompt("task_extract")
+    prompt_text = prompt.text
+    prompt_version = getattr(prompt, "version_tag", None) or getattr(prompt, "version", "?")
     lines = ["以下是医护与助手的对话记录：", ""]
     for item in history:
         role = "医护" if item.get("role") == "user" else "助手"
@@ -61,10 +69,10 @@ def _build_messages(
         lines.append(f"已知患者标识：{patient_hint}（可直接采用，无需再抽取）")
     return (
         [
-            {"role": "system", "content": prompt.text},
+            {"role": "system", "content": prompt_text},
             {"role": "user", "content": "\n".join(lines)},
         ],
-        prompt.version,
+        prompt_version,
     )
 
 
@@ -206,7 +214,10 @@ async def generate_draft(
         # 历史拉太长反而会把早已确定过的旧患者信息带进来
         history = await chat_service.recent_history(db, session_id, rounds=4)
 
-    messages, prompt_version = _build_messages(history, question, patient_ref, base)
+    extract_prompt = await prompt_service.get_active(db, "task_extract")
+    messages, prompt_version = _build_messages(
+        history, question, patient_ref, base, prompt=extract_prompt
+    )
     llm = get_llm()
     try:
         result = await llm.chat_tools(

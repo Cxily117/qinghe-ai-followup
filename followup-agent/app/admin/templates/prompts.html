@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}提示词模板{% endblock %}
+{% block sub %}在线编辑系统提示词，保存即生效；每次保存生成新版本，可回滚{% endblock %}
+
+{% block body %}
+<div class="grid grid-3-1">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2 class="card-title">
+          {% if name == 'policy_qa' %}制度问答提示词{% else %}任务抽取提示词{% endif %}
+        </h2>
+        <p class="card-hint">
+          当前生效 <span class="mono">{{ snapshot.version_tag }}</span>
+          {% if snapshot.source != 'db' %}
+          <span class="pill warn" style="margin-left:6px">库内无版本，正在用文件兜底</span>
+          {% else %}
+          <span class="pill ok" style="margin-left:6px">来自数据库 v{{ snapshot.version }}</span>
+          {% endif %}
+        </p>
+      </div>
+      <div class="tags">
+        {% for n in names %}
+        <a class="btn btn-sm {{ 'btn-primary' if n == name }}" href="/admin/prompts?name={{ n }}">
+          {{ '制度问答' if n == 'policy_qa' else '任务抽取' }}
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if view_version %}
+    <div class="flash ok" style="margin:0 0 12px">
+      正在查看历史版本 v{{ view_version.version }}（只读）。要恢复它，请点右侧版本历史里的「回滚」。
+    </div>
+    {% endif %}
+
+    {% if soft_notes %}
+    <div class="flash err" style="margin:0 0 12px;background:var(--warn-bg);color:var(--warn);border-color:#f3ddb8">
+      这条正文比出厂模板少了 {{ soft_notes|length }} 条建议条款（不影响保存）：
+      <ul class="note-list">{% for n in soft_notes %}<li>{{ n }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/admin/prompts/{{ name }}" id="promptForm">
+      <div class="field">
+        <label for="content">系统提示词正文</label>
+        <textarea class="editor" id="content" name="content" required>{{ body }}</textarea>
+        <div class="editor-meta">
+          <span>硬性要求：必须包含「引用」与「未查询到 / 超出知识库」两类约束，否则拒绝保存</span>
+          <span><b id="charCount">{{ body|length }}</b> 字</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field grow">
+          <label for="note">修改说明（写清为什么改，三个月后靠它复盘）</label>
+          <input class="input" id="note" name="note" placeholder="如：补充红旗症状升级条款">
+        </div>
+        <div class="field">
+          <button class="btn btn-primary" type="submit">保存并立即生效</button>
+        </div>
+      </div>
+
+      <div style="border-top:1px dashed var(--line);margin-top:16px;padding-top:14px">
+        <div class="field">
+          <label for="question">试跑问题（用上面这份草稿回答，不保存、不写会话）</label>
+          <input class="input" id="question" name="question" value="{{ draft_question }}"
+                 placeholder="如：骨科术后第 7 天要随访什么？">
+        </div>
+        <button class="btn" type="submit" formaction="/admin/prompts/{{ name }}/preview">试跑这条问题</button>
+        <span class="hint" style="margin-left:8px">会调用一次模型，产生少量费用</span>
+      </div>
+    </form>
+  </div>
+
+  <div>
+    <div class="card">
+      <h2 class="card-title">版本历史</h2>
+      <p class="card-hint">只增不删；回滚 = 复制旧正文成新版本</p>
+      <div class="table-wrap" style="margin-top:8px">
+        <table>
+          <thead><tr><th>版本</th><th>说明</th><th>时间</th><th></th></tr></thead>
+          <tbody>
+          {% for v in versions %}
+            <tr>
+              <td class="mono">
+                v{{ v.version }}
+                {% if v.is_active %}<span class="pill ok" style="margin-left:4px">生效</span>{% endif %}
+              </td>
+              <td style="font-size:12px;color:var(--ink-2)">{{ v.note or '-' }}</td>
+              <td class="mono" style="font-size:11.5px">{{ v.created_at.strftime('%m-%d %H:%M') if v.created_at else '-' }}</td>
+              <td>
+                <div class="tags">
+                  <a class="btn btn-sm btn-ghost" href="/admin/prompts?name={{ name }}&v={{ v.version }}">查看</a>
+                  {% if not v.is_active %}
+                  <form class="inline-form" method="post" action="/admin/prompts/{{ name }}/rollback"
+                        onsubmit="return confirm('将把 v{{ v.version }} 的正文复制为新版本并立即生效。确认？')">
+                    <input type="hidden" name="version" value="{{ v.version }}">
+                    <button class="btn btn-sm" type="submit">回滚</button>
+                  </form>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4" class="empty">暂无版本记录</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">生效机制</h2>
+      <ul class="note-list" style="color:var(--ink-2);margin-top:10px">
+        <li>每次问答都重新读库，多进程部署也不会用到旧版</li>
+        <li>回答的 meta 记录版本号 + 正文指纹，可回溯到具体是哪一版</li>
+        <li>库不可用时回退文件模板，不会拿空提示词去调模型</li>
+        <li>提示词对医护不可见（避免约束被提问方掌握）</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+{% if preview %}
+<div class="card" style="margin-top:16px">
+  <div class="card-head">
+    <div>
+      <h2 class="card-title">试跑结果</h2>
+      <p class="card-hint">
+        {% if preview.ok %}
+        模型 {{ preview.model }} · 命中资料后按现行护栏输出
+        {% if preview.rewritten %}<span class="pill warn" style="margin-left:6px">护栏改写过</span>{% endif %}
+        {% else %}知识库无命中{% endif %}
+      </p>
+    </div>
+  </div>
+
+  <div style="white-space:pre-wrap;font-size:13.5px;line-height:1.85;background:#fbfdfd;border:1px solid var(--line);border-radius:8px;padding:14px 16px">{{ preview.answer }}</div>
+
+  {% if preview.citations %}
+  <div style="margin-top:12px">
+    <div class="hint" style="margin-bottom:6px">引用来源</div>
+    {% for c in preview.citations %}
+    <div style="font-size:12.5px;color:var(--ink-2);padding:6px 0;border-bottom:1px dashed var(--line-soft)">
+      <b>[{{ c.n }}] {{ c.doc_title }}</b> · {{ c.preview }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if preview.flags %}
+  <div class="tags" style="margin-top:12px">
+    {% for f in preview.flags %}<span class="pill warn">{{ f }}</span>{% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<script>
+  var ta = document.getElementById('content');
+  var cnt = document.getElementById('charCount');
+  if (ta && cnt) {
+    ta.addEventListener('input', function () { cnt.textContent = ta.value.length; });
+  }
+</script>
+{% endblock %}

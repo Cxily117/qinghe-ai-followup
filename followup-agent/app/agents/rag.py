@@ -179,20 +179,33 @@ def build_messages(
     question: str,
     hits: list[RetrievedChunk],
     history: list[dict] | None = None,
+    prompt=None,
 ) -> tuple[list[dict], str]:
     """拼装 LLM messages，返回 (messages, 提示词版本)。
 
     多轮对话的处理有一个细节：历史里的 assistant 消息带 [1][2] 这类引用编号，
     但本轮的【资料】编号是重新从 1 开始编的，直接把历史塞进去会让编号错乱。
     所以历史消息里的引用标记要剥掉——历史只提供上下文语义，不提供出处。
+
+    prompt 由调用方传入（prompt_service 从数据库读的生效版本）。这里不再自己去
+    读文件：提示词已经是可以在线编辑的资产，本函数若还持有"自己加载"的能力，
+    管理员改完就会有人从别的入口拿到旧版，行为不可复现。
+    传 None 时才走文件兜底（离线脚本、单测用）。
     """
     from app.agents.guardrails import strip_citations
 
-    prompt = load_prompt("policy_qa")
+    if prompt is None:
+        prompt = load_prompt("policy_qa")
+        prompt_text = prompt.text
+        prompt_version = prompt.version
+    else:
+        prompt_text = prompt.text
+        prompt_version = getattr(prompt, "version_tag", None) or getattr(prompt, "version", "?")
+
     blocks = [f"【资料{n}】{hit.content}" for n, hit in enumerate(hits, 1)]
     user_content = "资料如下：\n\n" + "\n\n".join(blocks) + f"\n\n问题：{question}"
 
-    messages: list[dict] = [{"role": "system", "content": prompt.text}]
+    messages: list[dict] = [{"role": "system", "content": prompt_text}]
     for item in history or []:
         role = item.get("role")
         content = item.get("content") or ""
@@ -202,4 +215,4 @@ def build_messages(
             content = strip_citations(content)
         messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": user_content})
-    return messages, prompt.version
+    return messages, prompt_version

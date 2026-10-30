@@ -17,25 +17,27 @@
 | `随访系统架构图.png` | 系统分层架构图 |
 | `随访现状流程图与分析报告.docx` | 流程图 + 三维分析合并报告 |
 | `prototype/` | 阶段 1 RAG 命令行原型（见下） |
-| `followup-agent/` | **阶段 2 FastAPI 工程**（认证 + 知识库入库 + 流式 RAG + 任务草稿，见下） |
+| `followup-agent/` | **阶段 2/3 FastAPI 工程**（认证 + 知识库 + 流式 RAG + 任务草稿 + 管理后台，见下） |
 | `render_*.py` + `*.html` | 流程图/架构图源文件与渲染脚本（可改可重出图） |
 
 ## 阶段 2 工程（followup-agent）
 
-FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT + RAG。开发态 SQLite 零依赖可跑，生产切 PostgreSQL+pgvector。
+FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT + RAG + Jinja2 管理后台。开发态 SQLite 零依赖可跑，生产切 PostgreSQL+pgvector。
 
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
 | D1–D2 | 认证（JWT/PBKDF2）+ RBAC + 6 张表 + 双方言迁移 | ✅ |
 | D3–D4 | 知识库入库（切片→向量化→发布）+ `/chat` 流式 RAG（混合检索 + 护栏 + 溯源） | ✅ |
 | D5 | 任务草稿生成（function calling，AI 只到 draft，confirmed 必须人工点） | ✅ |
+| 阶段 3 | 管理后台：知识库管理（含 PDF）/ 提示词在线编辑（保存即生效）/ 对话审计与高危标记 | ✅ |
 | D6 | 质控报表（完成率 / 红旗升级率 / 无引用回答占比 / AI 草稿修改率） | ⬜ |
 
 ```bash
 cd followup-agent
 pip install -r requirements.txt
-alembic upgrade head            # 建 6 张表
-uvicorn app.main:app --reload   # http://127.0.0.1:8000/docs
+alembic upgrade head            # 建 8 张表
+uvicorn app.main:app --reload   # 医护问答 http://127.0.0.1:8000/
+                                # 管理后台 http://127.0.0.1:8000/admin/login
 
 # 端到端冒烟（另开终端）
 python scripts/smoke_test.py --base-url http://127.0.0.1:8000
@@ -50,7 +52,8 @@ python scripts/smoke_test.py --base-url http://127.0.0.1:8000
 D5 冒烟新增 5 组断言（客户端硬塞 `status=confirmed` 仍落 draft、缺患者标识 422、越权确认 404、
 人工确认 confirmed、重复确认/取消 409）；
 **医护问答前端**（单页 + 打字机 + 「正在检索随访规范…」状态 + 引用卡片可展开原文）已用无头浏览器实截图验证，
-错误统一为 `{code, message, request_id}` 中文 envelope。冒烟 16 步 26 项全绿。
+错误统一为 `{code, message, request_id}` 中文 envelope。
+阶段 3 管理后台（概览 / 知识库 / 提示词 / 审计 7 个页面）逐页无头浏览器截图核验，冒烟 **21 步全绿**。
 草稿不参与检索、发布后可命中并带引用、SSE 事件完整、`messages.meta` 溯源字段落库。
 详细设计取舍见 `followup-agent/README.md`。
 
