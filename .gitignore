@@ -21,3 +21,9 @@ __pycache__/
 .env
 # 知识库上传的原始制度文件（含患者/院内制度内容，不进公开仓）
 followup-agent/data/
+
+# 部署副本（含 .env 真实 Key 与 dev.db，绝不入库；原项目 followup-agent/ 才是源码）
+deploy-qinghe/
+# 发布应用的平台内部标记文件
+.wbapp_*.genie
+*.genie
