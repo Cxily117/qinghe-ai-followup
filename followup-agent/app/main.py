@@ -66,8 +66,15 @@ def create_app() -> FastAPI:
 
         @app.get("/", include_in_schema=False)
         async def index():
-            """医护问答入口。同域托管，前端直接用相对路径调 /api/v1/*。"""
-            return FileResponse(WEB_DIR / "index.html")
+            """医护问答入口。同域托管，前端直接用相对路径调 /api/v1/*。
+
+            HTML 必须禁缓存：前端发版只升静态资源版本号（?v=px），
+            若 HTML 本身被浏览器缓存，就会引用旧版本号 → 用户永远拿到旧样式。
+            """
+            return FileResponse(
+                WEB_DIR / "index.html",
+                headers={"Cache-Control": "no-cache, must-revalidate"},
+            )
 
     if ADMIN_STATIC.is_dir():
         app.mount("/admin/static", StaticFiles(directory=ADMIN_STATIC), name="admin-static")

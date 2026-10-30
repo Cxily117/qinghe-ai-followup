@@ -4,9 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>随访智能体 · 医护问答</title>
-<link rel="stylesheet" href="/static/style.css?v=p3">
+<link rel="stylesheet" href="/static/style.css?v=p4">
 </head>
 <body>
+
+<!-- 自检横幅：JS 正常加载时由 app.js 立即隐藏。
+     如果你能看到这条红条，说明页面不是通过服务打开的（如双击 HTML 文件），
+     此时样式和按钮都不会工作。 -->
+<div id="js-warn" class="js-warn">
+  ⚠️ 页面未正确加载。请关闭本页，在浏览器地址栏访问
+  <strong>http://127.0.0.1:8000/</strong>
+  （不要双击 HTML 文件打开；若已是该地址，请按 Ctrl+F5 强制刷新）。
+</div>
 
 <!-- 登录 / 注册：单页应用，未登录时盖在最上层（左侧品牌区 + 右侧表单区） -->
 <div class="overlay" id="login">
@@ -125,6 +134,6 @@
   </div>
 </div>
 
-<script src="/static/app.js?v=p3"></script>
+<script src="/static/app.js?v=p4"></script>
 </body>
 </html>

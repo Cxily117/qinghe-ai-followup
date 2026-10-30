@@ -612,3 +612,19 @@ sup.cite:hover { background: #d3ebe6; }
 .cc-actions { display: flex; gap: 8px; }
 .cc-result { margin-top: 8px; font-size: 12px; color: #067647; }
 .cc-result.err { color: var(--danger); }
+
+/* ---------------- JS 加载失败自检横幅 ---------------- */
+.js-warn {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 999;
+  padding: 10px 16px;
+  background: #b42318;
+  color: #fff;
+  font-size: 13px;
+  text-align: center;
+  line-height: 1.6;
+}
+.js-warn strong { color: #ffe4e0; }

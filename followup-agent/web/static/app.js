@@ -23,6 +23,15 @@
   };
 
   const $ = (sel) => document.querySelector(sel);
+
+  // 自检横幅：JS 能跑到这里说明脚本加载正常，把 index.html 里的红色警告收起来。
+  // 反过来，用户若用 file:// 双击打开，/static/app.js 根本加载不到，横幅就会一直挂着。
+  const jsWarn = $("#js-warn");
+  if (jsWarn) jsWarn.hidden = true;
+  if (location.protocol === "file:") {
+    alert("请通过 http://127.0.0.1:8000/ 访问本系统，直接双击 HTML 文件无法加载样式与接口。");
+  }
+
   const loginView = $("#login");
   const appView = $("#app");
   const loginForm = $("#login-form");
