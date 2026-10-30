@@ -9,10 +9,11 @@ from __future__ import annotations
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 from fastapi.responses import StreamingResponse
 
 from app.core.deps import CurrentUser, DbDep
+from app.core.errors import AppError
 from app.schemas.chat import AskRequest, AskResponse, MessageOut, SessionOut
 from app.services import chat_service, qa_service
 
@@ -38,7 +39,8 @@ async def chat_stream(payload: AskRequest, user: CurrentUser, db: DbDep):
     if payload.session_id is not None:
         exists = await chat_service.get_session_for_user(db, payload.session_id, user.id)
         if exists is None:
-            raise HTTPException(status_code=404, detail="会话不存在或无权访问")
+            # 404 而不是 403：不暴露"这个会话存在但不属于你"
+            raise AppError("SESSION_NOT_FOUND")
 
     user_id = user.id  # 依赖注入的 db/user 在响应开始后会关闭，先把值取出来
 
@@ -52,7 +54,7 @@ async def chat_stream(payload: AskRequest, user: CurrentUser, db: DbDep):
                 yield _sse(event)
         except Exception as exc:  # 兜底：流内异常也要以事件形式告知前端，而不是断连
             logger.exception("问答流异常")
-            yield _sse({"type": "error", "detail": f"服务异常：{exc}"})
+            yield _sse({"type": "error", "code": "INTERNAL", "message": f"服务异常：{exc}"})
         yield _sse({"type": "end"})
 
     return StreamingResponse(event_source(), media_type="text/event-stream", headers=SSE_HEADERS)
@@ -70,10 +72,10 @@ async def chat_ask(payload: AskRequest, user: CurrentUser, db: DbDep):
             db, user_id=user.id, question=payload.question, session_id=payload.session_id
         )
     except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise AppError("SESSION_NOT_FOUND", str(exc))
     except Exception as exc:  # 上游模型失败：502，前端可提示"稍后重试"
         logger.exception("问答失败")
-        raise HTTPException(status_code=502, detail=f"模型调用失败：{exc}")
+        raise AppError("LLM_UPSTREAM", f"模型调用失败：{exc}")
 
 
 @router.post("/sessions", status_code=status.HTTP_201_CREATED, summary="新建会话")
@@ -92,7 +94,7 @@ async def list_sessions(user: CurrentUser, db: DbDep):
 async def list_messages(session_id: int, user: CurrentUser, db: DbDep):
     messages = await chat_service.list_messages(db, session_id, user.id)
     if messages is None:
-        raise HTTPException(status_code=404, detail="会话不存在或无权访问")
+        raise AppError("SESSION_NOT_FOUND")
     return [
         MessageOut(
             id=m.id,

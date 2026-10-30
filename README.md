@@ -48,7 +48,9 @@ python scripts/smoke_test.py --base-url http://127.0.0.1:8000
 
 已实测：D1–D2 的 14 项接口回归；D3–D4 的冒烟脚本在 **mock 与真实模型（glm-4-flash + embedding-3）两种模式下全绿**；
 D5 冒烟新增 5 组断言（客户端硬塞 `status=confirmed` 仍落 draft、缺患者标识 422、越权确认 404、
-人工确认 confirmed、重复确认/取消 409），mock 模式 22 项全绿。
+人工确认 confirmed、重复确认/取消 409）；
+**医护问答前端**（单页 + 打字机 + 「正在检索随访规范…」状态 + 引用卡片可展开原文）已用无头浏览器实截图验证，
+错误统一为 `{code, message, request_id}` 中文 envelope。冒烟 16 步 26 项全绿。
 草稿不参与检索、发布后可命中并带引用、SSE 事件完整、`messages.meta` 溯源字段落库。
 详细设计取舍见 `followup-agent/README.md`。
 

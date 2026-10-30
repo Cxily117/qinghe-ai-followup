@@ -39,10 +39,17 @@ def _meta(
     flags: dict,
     answer_chars: int,
     streamed: bool,
+    citation_detail: list[dict] | None = None,
 ) -> dict:
-    """assistant 消息的溯源元数据。字段命名与架构方案一致，便于后续质控报表统计。"""
+    """assistant 消息的溯源元数据。字段命名与架构方案一致，便于后续质控报表统计。
+
+    `citations` 只存编号（统计用），`citation_detail` 存完整引用对象（文件名+片段），
+    后者是为了让前端在**切换会话回看历史**时也能渲染来源卡片——
+    否则历史消息里只有 [1][2] 两个数字，医护看不出依据的是哪份制度。
+    """
     return {
         "citations": citations,
+        "citation_detail": citation_detail or [],
         "hits": hits_count,
         "model": model,
         "latency_ms": latency_ms,
@@ -112,6 +119,7 @@ async def answer_once(
         flags=flags,
         answer_chars=len(answer),
         streamed=False,
+        citation_detail=[h.to_citation(n) for n, h in enumerate(hits, 1) if n in citations],
     )
     meta["usage"] = result.usage
     message = await chat_service.append_message(
@@ -151,7 +159,7 @@ async def stream_events(
                 db, user_id, session_id, question
             )
         except LookupError as exc:
-            yield {"type": "error", "detail": str(exc)}
+            yield {"type": "error", "code": "SESSION_NOT_FOUND", "message": str(exc)}
             return
 
         # 历史要在写入本轮 user 消息之前取，否则会把当前问题重复拼两次
@@ -220,7 +228,11 @@ async def stream_events(
                         streamed=True,
                     ),
                 )
-            yield {"type": "error", "detail": f"模型调用失败：{exc}"}
+            yield {
+                "type": "error",
+                "code": "LLM_UPSTREAM",
+                "message": f"模型调用失败：{exc}",
+            }
             return
 
         raw = "".join(chunks)
@@ -246,6 +258,9 @@ async def stream_events(
                 flags=flags,
                 answer_chars=len(answer),
                 streamed=True,
+                citation_detail=[
+                    h.to_citation(n) for n, h in enumerate(hits, 1) if n in citations
+                ],
             ),
         )
 

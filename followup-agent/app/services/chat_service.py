@@ -76,8 +76,14 @@ async def list_messages(
     return list(rows)
 
 
-async def recent_history(db: AsyncSession, session_id: int, limit: int = 6) -> list[dict]:
-    """取最近若干条消息作为多轮上下文（升序返回，仅 role/content）。"""
+async def recent_history(db: AsyncSession, session_id: int, rounds: int = 6) -> list[dict]:
+    """取最近 N **轮**对话作为多轮上下文（升序返回，仅 role/content）。
+
+    「轮」的口径：1 轮 = 1 条 user + 1 条 assistant，所以 6 轮要取 12 条消息。
+    早先版本按「条」取 6 条，实际只有 3 轮——上下文比预期短一半，
+    模型接不住「刚才那个患者」这种指代。
+    """
+    limit = max(1, rounds) * 2
     rows = (
         await db.execute(
             select(Message.role, Message.content)
@@ -86,7 +92,12 @@ async def recent_history(db: AsyncSession, session_id: int, limit: int = 6) -> l
             .limit(limit)
         )
     ).all()
-    return [{"role": r[0], "content": r[1]} for r in reversed(rows)]
+    history = [{"role": r[0], "content": r[1]} for r in reversed(rows)]
+    # 截断点若落在 assistant 上，说明这半轮没有对应的提问，去掉——
+    # 否则模型会看到一段"没有问题的回答"，容易把它当成新的用户意图
+    while history and history[0]["role"] != "user":
+        history.pop(0)
+    return history
 
 
 async def append_message(

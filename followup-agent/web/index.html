@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>随访智能体 · 医护问答</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- 登录 / 注册：单页应用，未登录时盖在最上层 -->
+<div class="overlay" id="login">
+  <form class="login-card" id="login-form" autocomplete="on">
+    <div class="brand">
+      <span class="brand-mark"></span>
+      <div>
+        <h1>清禾医院 · 随访智能体</h1>
+        <p>仅限院内医护人员使用，问答依据已发布的随访制度</p>
+      </div>
+    </div>
+
+    <label class="field">
+      <span>用户名</span>
+      <input id="username" name="username" type="text" required autocomplete="username" placeholder="如 nurse01">
+    </label>
+    <label class="field">
+      <span>密码</span>
+      <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="请输入密码">
+    </label>
+
+    <p class="form-error" id="login-error" hidden></p>
+
+    <button class="btn primary" id="login-submit" type="submit">登录</button>
+    <button class="btn link" id="toggle-register" type="button">没有账号？注册一个医护账号</button>
+    <p class="login-tip">注册后默认为「医护」角色，仅能问答与生成任务草稿；制度维护需管理员。</p>
+  </form>
+</div>
+
+<!-- 主界面 -->
+<div class="app" id="app" hidden>
+  <header class="topbar">
+    <div class="brand small">
+      <span class="brand-mark"></span>
+      <strong>随访智能体</strong>
+      <span class="tag">制度问答</span>
+    </div>
+    <div class="topbar-right">
+      <span class="who" id="who"></span>
+      <button class="btn ghost" id="logout" type="button">退出</button>
+    </div>
+  </header>
+
+  <div class="body">
+    <aside class="sidebar">
+      <button class="btn primary block" id="new-session" type="button">+ 新建对话</button>
+      <p class="sidebar-title">我的会话</p>
+      <div class="session-list" id="session-list"></div>
+    </aside>
+
+    <main class="chat">
+      <div class="messages" id="messages">
+        <!-- 空状态：给三个真实可问的问题，降低"不知道能问什么"的门槛 -->
+        <div class="empty" id="empty-state">
+          <h2>可以问我随访制度里的事</h2>
+          <p>回答只依据已发布的制度条文，并标注出处；超出制度范围会直接说明。</p>
+          <div class="chips">
+            <button class="chip" type="button">骨科术后需要随访几次？分别在什么时候？</button>
+            <button class="chip" type="button">患者发烧到 39 度该怎么处理？</button>
+            <button class="chip" type="button">随访完成率是怎么算的？</button>
+          </div>
+        </div>
+      </div>
+
+      <form class="composer" id="composer">
+        <textarea id="question" rows="1" placeholder="输入问题，Enter 发送，Shift + Enter 换行" maxlength="2000"></textarea>
+        <div class="composer-side">
+          <span class="counter" id="counter">0 / 2000</span>
+          <button class="btn primary" id="send" type="submit">发送</button>
+        </div>
+      </form>
+      <p class="disclaimer">回答为制度条文摘要，不构成诊疗建议；具体处置以专科医生意见为准。</p>
+    </main>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

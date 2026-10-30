@@ -1,6 +1,6 @@
 # followup-agent · 阶段 2（D1–D5）
 
-FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT + RAG + function calling。
+FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT + RAG + function calling + 原生 JS 前端。
 
 - **D1–D2**：认证（JWT/PBKDF2）+ RBAC + 6 张表 + 双方言迁移 ✅
 - **D3–D4**：知识库入库（切片→向量化→发布）+ `/chat` 流式 RAG（混合检索 + 护栏 + 溯源落库）✅
@@ -68,6 +68,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | GET | `/api/v1/tasks/{id}` | 草稿详情（含 `content.ai` 溯源） | 归属人/管理员 |
 | POST | `/api/v1/tasks/{id}/confirm` | **人工确认**（AI 无法调用） | 归属人/管理员 |
 | POST | `/api/v1/tasks/{id}/cancel` | 取消草稿（已确认不可取消 → 409） | 归属人/管理员 |
+| GET | `/` | **医护问答单页**（web/ 目录，同域托管无 CORS） | 登录后使用 |
+| GET | `/api/v1/kb/citations/{chunk_id}` | 引用片段原文（仅 published 文档） | 登录 |
 | GET | `/api/v1/reports/summary` | 质控汇总（D6） | 管理员 |
 
 ### SSE 事件序列
@@ -109,6 +111,35 @@ event: end
 
 已知取舍：模型"答一半 + 拒一半"时引用也会被清空。这是**故意偏保守**——
 "拒答却带着资料编号"看起来像编造出处，比"少显示两条来源"严重得多。
+
+## 医护问答前端（`web/`，无构建）
+
+单页三件套（HTML + 原生 JS + CSS），FastAPI 同域托管在 `GET /`，登录后直接用。
+
+| 设计 | 为什么 |
+|---|---|
+| **不用 EventSource，用 fetch + ReadableStream 手解 SSE** | EventSource 带不了 `Authorization` 头；顺带能统一处理 401 跳登录 |
+| **打字机走帧队列**（`requestAnimationFrame` 每帧 2–5 字，随积压量加速） | 上游一个 chunk 可能几十字，直接 append 是"跳字"不是"打字" |
+| **`replace` 事件整体覆盖气泡** | 护栏删过引用编号后，屏幕上不能残留旧的 `[1]` |
+| **检索态文案锚在事件上**：`session` 显示「正在检索随访规范…」，`citations`/首个 `delta` 收起 | 这段时间正好是 BM25 + 向量打分；超过 1.5s 追加"仍在检索"防误判卡死 |
+| **历史消息引用存 `meta.citation_detail`**（完整对象，不只编号） | 切换会话回看时也能渲染"文件名 + 片段"，否则只剩 `[1][2]` 两个数字 |
+| **多轮上下文按「轮」取 6 轮**（`recent_history(rounds=6)`） | 旧实现按条取 6 条 = 3 轮，上下文短一半；截断点若落在 assistant 上会去掉半轮 |
+
+## 统一错误 envelope
+
+所有 4xx/5xx 返回 `{"code","message","request_id"}`；`code` 是稳定标识（前端按它分支），`message` 直接可展示，`request_id` 用于报障定位日志。
+
+| code | HTTP | message |
+|---|---|---|
+| `AUTH_REQUIRED` | 401 | 未登录或登录已过期 |
+| `SESSION_NOT_FOUND` | 404 | 会话不存在或无权访问（用 404 不用 403：不暴露"会话存在但不属于你"） |
+| `QUESTION_EMPTY` / `QUESTION_TOO_LONG` | 422 | 问题不能为空 / 最多 2000 字 |
+| `CHUNK_NOT_FOUND` | 404 | 引用片段不存在，或所属文档已归档 |
+| `LLM_UPSTREAM` | 502 | 模型调用失败，请稍后重试 |
+| `INTERNAL` | 500 | 服务内部错误，已记录日志 |
+
+规则：**SSE 已开始输出后**（HTTP 200 已发出）错误只能走 `event: error`，`code` 与上表同名。
+注意"知识库为空"不是错误——它是业务上的拒答，返回 200 + 拒答话术且不标引用（合规线，不能变成 503）。
 
 ## D5 的关键设计（任务草稿）
 
@@ -157,7 +188,10 @@ python scripts/smoke_test.py --base-url http://127.0.0.1:8000
 覆盖：健康检查 → 注册登录 → 上传(draft) → **发布前提问不命中该文档** → 发布 →
 **发布后命中并引用** → SSE 事件完整性 → `messages.meta` 溯源字段 →
 **生成任务草稿（客户端硬塞 `status=confirmed` 也必须落 draft）** → 缺患者标识 422 →
-越权确认 404 → 人工确认 confirmed → 重复确认/取消已确认 409。
+越权确认 404 → 人工确认 confirmed → 重复确认/取消已确认 409 →
+**错误 envelope（空问题/超长/越权会话的 code 与中文 message）** →
+**引用原文接口（医护可读 published、不存在返回 CHUNK_NOT_FOUND）** →
+**前端托管（GET / 单页 + /static/app.js）**。
 退出码 0 = 全绿。每次运行会埋一个唯一编号提问，避免被库里历史文档干扰。
 
 ## 数据模型（6 张表）
@@ -169,9 +203,10 @@ python scripts/smoke_test.py --base-url http://127.0.0.1:8000
 
 ```
 followup-agent/
+├── web/                      # ★ 医护问答单页（index.html + static/{app.js,style.css}，无构建）
 ├── app/
-│   ├── main.py
-│   ├── core/                 # config / security(JWT+PBKDF2) / database / deps(RBAC)
+│   ├── main.py               # 挂载 web/ 静态托管 + 注册统一错误处理器
+│   ├── core/                 # config / security(JWT+PBKDF2) / database / deps(RBAC) / errors(统一错误码)
 │   ├── api/v1/               # auth · chat · kb · tasks · reports
 │   ├── models/               # 6 张表 ORM
 │   ├── schemas/              # Pydantic DTO
@@ -183,7 +218,7 @@ followup-agent/
 │   │   └── guardrails.py     #   输出护栏
 │   └── services/             # knowledge_service · chat_service · qa_service · task_service（编排）
 ├── alembic/                  # env.py（URL 从 Settings 注入）+ versions/0001
-├── scripts/smoke_test.py     # 端到端冒烟
+├── scripts/smoke_test.py     # 端到端冒烟（16 步 26 项断言）
 ├── docker-compose.yml        # pgvector/pgvector:pg16（5433）
 └── .env.example
 ```

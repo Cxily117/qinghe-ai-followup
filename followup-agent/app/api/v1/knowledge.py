@@ -13,7 +13,8 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import func, select
 
 from app.core.config import get_settings
-from app.core.deps import AdminUser, DbDep
+from app.core.deps import AdminUser, CurrentUser, DbDep
+from app.core.errors import AppError
 from app.models.kb import KbChunk, KbDocument
 from app.schemas.kb import ChunkOut, KbStats, DocumentOut
 from app.services import knowledge_service
@@ -170,6 +171,36 @@ async def list_chunks(document_id: int, admin: AdminUser, db: DbDep):
             ).model_dump()
             for c in chunks
         ],
+    }
+
+
+@router.get("/citations/{chunk_id}", summary="读取引用片段原文（登录可读）")
+async def citation_detail(chunk_id: int, user: CurrentUser, db: DbDep):
+    """前端点击引用卡片时用：把 80 字预览展开成完整条文。
+
+    权限刻意放宽到「登录即可读」——医护要核对依据，不能要求他们先是管理员。
+    但只放 published 文档的切片：制度未签核前，条文不该被人当作依据引用。
+    """
+    row = (
+        await db.execute(
+            select(KbChunk, KbDocument)
+            .join(KbDocument, KbDocument.id == KbChunk.document_id)
+            .where(KbChunk.id == chunk_id, KbDocument.status == "published")
+        )
+    ).first()
+    if row is None:
+        raise AppError("CHUNK_NOT_FOUND")
+
+    chunk, doc = row
+    return {
+        "chunk_id": chunk.id,
+        "document_id": doc.id,
+        "doc_title": doc.title,
+        "doc_type": doc.doc_type,
+        "version": doc.version,
+        "chunk_index": chunk.chunk_index,
+        # 原文不做二次截断：核对条文时缺字比字数多危险得多
+        "content": chunk.content,
     }
 
 

@@ -202,7 +202,9 @@ async def generate_draft(
     base = base_date or date.today()
     history: list[dict] = []
     if session_id is not None:
-        history = await chat_service.recent_history(db, session_id, limit=8)
+        # 抽取任务只需最近 4 轮：随访安排通常就在上一两轮里，
+        # 历史拉太长反而会把早已确定过的旧患者信息带进来
+        history = await chat_service.recent_history(db, session_id, rounds=4)
 
     messages, prompt_version = _build_messages(history, question, patient_ref, base)
     llm = get_llm()

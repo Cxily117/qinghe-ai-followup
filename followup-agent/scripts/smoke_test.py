@@ -236,6 +236,61 @@ def main() -> int:
         )
         ok &= check(cancel.status_code == 409, f"取消已确认任务 HTTP {cancel.status_code}")
 
+        # ---------------- 医护问答入口（前端契约） ----------------
+        print("[14] 错误统一为 {code, message, request_id} 且中文")
+        empty_q = c.post(
+            "/api/v1/chat/ask",
+            headers={"Authorization": f"Bearer {staff}"},
+            json={"question": ""},
+        )
+        body = empty_q.json()
+        ok &= check(
+            empty_q.status_code == 422
+            and body.get("code") == "QUESTION_EMPTY"
+            and "空" in body.get("message", "")
+            and "request_id" in body,
+            f"空问题 → HTTP {empty_q.status_code} {body.get('code')}「{body.get('message')}」",
+        )
+        long_q = c.post(
+            "/api/v1/chat/ask",
+            headers={"Authorization": f"Bearer {staff}"},
+            json={"question": "随访" * 1200},
+        )
+        ok &= check(
+            long_q.json().get("code") == "QUESTION_TOO_LONG",
+            f"超长问题 → {long_q.json().get('code')}",
+        )
+        ghost = c.post(
+            "/api/v1/chat",
+            headers={"Authorization": f"Bearer {other_token}"},
+            json={"question": "随访怎么算", "session_id": before["session_id"]},
+        )
+        ok &= check(
+            ghost.status_code == 404 and ghost.json().get("code") == "SESSION_NOT_FOUND",
+            f"越权会话 → HTTP {ghost.status_code} {ghost.json().get('code')}（404 而非 403，不暴露会话存在性）",
+        )
+
+        print("[15] 引用原文接口（登录可读，仅 published）")
+        chunk_id = after["citations"][0]["chunk_id"]
+        detail = c.get(f"/api/v1/kb/documents/{doc['id']}/chunks", headers={"Authorization": f"Bearer {admin}"}).json()
+        first_chunk = detail["items"][0]["chunk_id"]
+        full = c.get(f"/api/v1/kb/citations/{first_chunk}", headers={"Authorization": f"Bearer {staff}"}).json()
+        ok &= check(
+            full.get("doc_title") == title and len(full.get("content", "")) > 20,
+            f"医护可读引用原文：{full.get('doc_title')}（{len(full.get('content', ''))} 字）",
+        )
+        missing = c.get("/api/v1/kb/citations/999999", headers={"Authorization": f"Bearer {staff}"}).json()
+        ok &= check(missing.get("code") == "CHUNK_NOT_FOUND", f"不存在的切片 → {missing.get('code')}")
+
+        print("[16] 前端托管：GET / 与静态资源")
+        index = c.get("/")
+        ok &= check(
+            index.status_code == 200 and "随访智能体" in index.text,
+            f"GET / → {index.status_code}（单页 HTML）",
+        )
+        js = c.get("/static/app.js")
+        ok &= check(js.status_code == 200 and "consumeSSE" in js.text, f"/static/app.js → {js.status_code}")
+
     print("\n" + ("全部通过 ✅" if ok else "存在失败项 ❌"))
     return 0 if ok else 1
 
