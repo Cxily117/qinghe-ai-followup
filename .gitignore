@@ -19,3 +19,5 @@ __pycache__/
 *.db
 *.sqlite3
 .env
+# 知识库上传的原始制度文件（含患者/院内制度内容，不进公开仓）
+followup-agent/data/

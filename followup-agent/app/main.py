@@ -25,8 +25,10 @@ def create_app() -> FastAPI:
     s = get_settings()
     app = FastAPI(
         title=s.app_name,
-        version="0.2.0",
-        description="医院随访智能体系统 · 阶段2 D1–D2（认证 + 数据模型）",
+        version="0.3.0",
+        description=(
+            "医院随访智能体系统 · 阶段2（D1–D2 认证与数据模型；D3–D4 知识库入库 + RAG 流式问答）"
+        ),
         lifespan=lifespan,
     )
     app.include_router(api_router, prefix=s.api_v1_prefix)
@@ -37,6 +39,10 @@ def create_app() -> FastAPI:
             "status": "ok",
             "app": s.app_name,
             "db_dialect": s.database_url.split("://")[0],
+            # 这两个字段是排障第一现场要看的东西：mock 状态下回答质量是无意义的
+            "llm_provider": s.llm_provider,
+            "embed_provider": s.embed_provider,
+            "embed_dim": s.embed_dim,
         }
 
     return app

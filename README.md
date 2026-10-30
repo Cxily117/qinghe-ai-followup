@@ -17,23 +17,37 @@
 | `随访系统架构图.png` | 系统分层架构图 |
 | `随访现状流程图与分析报告.docx` | 流程图 + 三维分析合并报告 |
 | `prototype/` | 阶段 1 RAG 命令行原型（见下） |
-| `followup-agent/` | **阶段 2 FastAPI 工程骨架**（认证/JWT/6 张表/迁移，见下） |
+| `followup-agent/` | **阶段 2 FastAPI 工程**（认证 + 知识库入库 + 流式 RAG 问答，见下） |
 | `render_*.py` + `*.html` | 流程图/架构图源文件与渲染脚本（可改可重出图） |
 
-## 阶段 2 工程骨架（followup-agent）
+## 阶段 2 工程（followup-agent）
 
-FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT，D1–D2 范围。开发态 SQLite 零依赖可跑，生产切 PostgreSQL+pgvector。
+FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT + RAG。开发态 SQLite 零依赖可跑，生产切 PostgreSQL+pgvector。
+
+| 里程碑 | 内容 | 状态 |
+|---|---|---|
+| D1–D2 | 认证（JWT/PBKDF2）+ RBAC + 6 张表 + 双方言迁移 | ✅ |
+| D3–D4 | 知识库入库（切片→向量化→发布）+ `/chat` 流式 RAG（混合检索 + 护栏 + 溯源） | ✅ |
+| D5–D6 | 任务草稿生成（function calling）+ 质控报表 | ⬜ |
 
 ```bash
 cd followup-agent
 pip install -r requirements.txt
 alembic upgrade head            # 建 6 张表
 uvicorn app.main:app --reload   # http://127.0.0.1:8000/docs
+
+# 端到端冒烟（另开终端）
+python scripts/smoke_test.py --base-url http://127.0.0.1:8000
 ```
 
 生产（pgvector）：`docker compose up -d` → `.env` 设 `DATABASE_URL=postgresql+asyncpg://followup:followup@localhost:5433/followup` → `alembic upgrade head`。
 
-已实测（14 项回归全通过）：注册/登录/`/auth/me`、401（错密码/无 token）、403（医护越权访问管理员接口）、501（占位接口）、RBAC 双角色、OpenAPI 文档。
+默认 `mock` 供应商（无 Key 也能跑通全链路）；接真实模型只改环境变量：
+`LLM_PROVIDER=openai` + `EMBED_PROVIDER=openai` + `LLM_API_BASE/LLM_API_KEY`。
+
+已实测：D1–D2 的 14 项接口回归；D3–D4 的冒烟脚本在 **mock 与真实模型（glm-4-flash + embedding-3）两种模式下全绿**——
+草稿不参与检索、发布后可命中并带引用、SSE 事件完整、`messages.meta` 溯源字段落库。
+详细设计取舍见 `followup-agent/README.md`。
 
 
 ## 阶段 1 原型快速开始

@@ -23,13 +23,28 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 720
 
-    # LLM（阶段 3 使用，D1–D2 仅占位）
-    llm_provider: str = "mock"
-    llm_api_base: str = ""
+    # ---- LLM 网关（D3–D4 起真正启用）----
+    llm_provider: str = "mock"  # mock | openai（OpenAI 兼容：智谱/DeepSeek/通义/vLLM）
+    llm_api_base: str = ""  # 如 https://open.bigmodel.cn/api/paas/v4
     llm_api_key: str = ""
     llm_chat_model: str = "glm-4-flash"
+    llm_temperature: float = 0.2  # 制度问答要稳，温度调低
+    llm_timeout: float = 120.0
+
+    # ---- Embedding ----
+    embed_provider: str = "mock"  # mock | openai
     embed_model: str = "embedding-3"
-    embed_dim: int = 1024
+    embed_dim: int = 1024  # 必须与 pgvector 的 vector(N) 定义一致
+
+    # ---- RAG ----
+    chunk_size: int = 500  # 切片最大字符数（制度类中文文档 400~600 合适）
+    chunk_overlap: int = 50  # 相邻切片重叠字符数，避免关键句被切断
+    rag_top_k: int = 3  # 混合检索返回条数
+    rag_alpha: float = 0.5  # 融合权重：向量分占比，BM25 占 1-alpha
+    rag_max_candidates: int = 5000  # 单次检索扫描的切片上限（超过应改 pgvector ANN）
+
+    # ---- 知识库存储 ----
+    kb_storage_dir: str = "data/kb"  # 原始文档落盘目录（不入库，仅留档）
 
     @property
     def is_postgres(self) -> bool:
