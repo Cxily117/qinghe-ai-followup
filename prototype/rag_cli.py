@@ -259,7 +259,8 @@ SYSTEM_PROMPT = (
     "你是医院随访制度问答助手。规则：\n"
     "1. 只依据【资料】中的内容回答，禁止编造；\n"
     "2. 回答末尾标注引用编号，如 [1][3]；\n"
-    "3. 资料不足以回答时，明确说「该问题超出当前知识库范围」，不要猜测；\n"
+    "3. 资料不足以回答时，明确说「该问题超出当前知识库范围」，不要猜测，"
+    "且此时不要标注任何引用编号；\n"
     "4. 禁止给出诊断、用药建议；涉及红旗症状时提示立即联系专科医生。"
 )
 
@@ -336,9 +337,17 @@ def main() -> None:
         answer = llm_chat(messages)               # ★ 调 LLM 网关
         print("\n[回答]")
         print(answer)
-        if sources:
-            print("\n[引用来源] 本回答依据知识库 "
-                  + "、".join(f"片段{i + 1}" for i in range(len(sources))) + " 生成")
+        if retriever is not None and sources:
+            # 改进点修复：只显示回答中实际被引用 [n] 的片段，而非全部拼入块
+            cited = sorted({int(m) for m in re.findall(r"\[(\d+)\]", answer)
+                            if 1 <= int(m) <= len(sources)})
+            if cited:
+                print("\n[引用来源] 回答实际引用：")
+                for n in cited:
+                    preview = sources[n - 1][:60].replace("\n", " ")
+                    print(f"  [{n}] {preview}...")
+            else:
+                print("\n[引用来源] 回答未标注引用（多为拒答场景，属正常）")
 
 
 if __name__ == "__main__":

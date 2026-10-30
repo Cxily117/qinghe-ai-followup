@@ -30,10 +30,23 @@ pip install faiss-cpu numpy rank_bm25 jieba httpx
 # 离线联调（无需 API Key）
 python rag_cli.py 随访制度示例.md
 
-# 接真实模型（OpenAI 兼容接口，国产模型中转均可）
-# Windows PowerShell: $env:LLM_PROVIDER="openai"; $env:LLM_API_KEY="sk-xxx"; $env:LLM_API_BASE="https://xxx/v1"
+# 接真实模型——智谱 GLM（已实测，OpenAI 兼容接口）
+# 注意：LLM 和 Embedding 两个供应商开关都要设为 openai
+# PowerShell:
+$env:LLM_PROVIDER="openai";   $env:EMBED_PROVIDER="openai"
+$env:LLM_API_BASE="https://open.bigmodel.cn/api/paas/v4"
+$env:LLM_API_KEY="<你的Key>"
+$env:LLM_CHAT_MODEL="glm-4-flash"; $env:LLM_EMBED_MODEL="embedding-3"
 python rag_cli.py 随访制度示例.md
+
+# 任意 OpenAI 兼容服务同理，改 API_BASE / 模型名即可
 ```
+
+**真实模型实测记录**（glm-4-flash + embedding-3）：
+- 关键词问「骨科术后随访节点」→ 准确回答第 3/7/30 天，引用正确；
+- 语义问「患者发烧到 39 度」→ 红旗症状片段融合分 1.00（原文为"体温超过38.5℃"，字面不重合），回答完整复述升级四步流程；
+- 超范围问「化疗后用什么药」→ 正确拒答「该问题超出当前知识库范围」，不编造、不标引用；
+- 结论：免费档 glm-4-flash 对制度问答场景够用。
 
 六个核心模块（切片 / Embedding 客户端 / FAISS 向量库 / 混合检索器 / LLM 网关 / 提示词构建）均标注了阶段 2 的 FastAPI 工程迁移目标，详见《随访智能体技术架构方案.md》第 6 节。
 
