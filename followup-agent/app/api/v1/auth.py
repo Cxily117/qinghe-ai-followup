@@ -11,7 +11,7 @@ router = APIRouter(prefix="/auth", tags=["认证"])
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED,
-             summary="注册用户")
+             summary="注册用户（医护）")
 async def register(payload: UserRegister, db: DbDep):
     exists = (
         await db.execute(select(User).where(User.username == payload.username))
@@ -19,11 +19,19 @@ async def register(payload: UserRegister, db: DbDep):
     if exists:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="用户名已存在")
 
+    # 冷启动引导（bootstrap）：系统一个管理员都没有时，首个注册账号自动成为管理员。
+    # 只在零管理员时开放一次——之后管理员只能由后台「用户与授权」页授予，
+    # 或服务器本地跑 scripts/create_admin.py。否则会回到「人人可自注册 admin」的老问题。
+    has_admin = (
+        await db.execute(select(User.id).where(User.role == "admin").limit(1))
+    ).scalar_one_or_none() is not None
+    role = "staff" if has_admin else "admin"
+
     user = User(
         username=payload.username,
         password_hash=hash_password(payload.password),
         full_name=payload.full_name,
-        role=payload.role,
+        role=role,
         department=payload.department,
     )
     db.add(user)

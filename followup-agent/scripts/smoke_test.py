@@ -18,9 +18,14 @@ import json
 import random
 import string
 import sys
+import urllib.parse
 from pathlib import Path
 
 import httpx
+
+# 脚本以任意目录运行，sys.path 里没有项目根 → 手动补上，
+# 否则 `from app.core.database import ...` 会 ModuleNotFoundError。
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 SAMPLE_DOC = """# 出院后随访管理制度（试行）
 
@@ -62,19 +67,48 @@ def main() -> int:
         health = c.get("/health").json()
         ok &= check(health.get("status") == "ok", f"health={health}")
 
-        print("[2] 注册并登录")
-        for username, role in ((f"smoke_admin_{suffix}", "admin"), (f"smoke_nurse_{suffix}", "staff")):
-            c.post(
-                "/api/v1/auth/register",
-                json={"username": username, "password": "Passw0rd!", "full_name": username, "role": role},
-            )
+        print("[2] 账号准备：管理员直连落库，医护走注册（新约束：注册只发医护）")
+        # 注册接口已收紧为只发医护（role 字面量只剩 "staff"），管理员改由
+        # user_service.ensure_admin 直连落库 —— 与 scripts/create_admin.py 同一函数。
+        import asyncio
+
+        from app.core.database import SessionLocal
+        from app.services.user_service import ensure_admin
+
+        admin_username = f"smoke_admin_{suffix}"
+        staff_username = f"smoke_nurse_{suffix}"
+
+        async def _make_admin() -> int:
+            async with SessionLocal() as db:
+                u = await ensure_admin(
+                    db, username=admin_username, password="Passw0rd!", full_name=admin_username
+                )
+                return u.id
+
+        admin_id = asyncio.run(_make_admin())
+
+        # 注册默认角色必须是医护：即使请求里带 role="admin" 也要被 schema 直接拒绝（422）
+        reg_admin_try = c.post(
+            "/api/v1/auth/register",
+            json={"username": staff_username, "password": "Passw0rd!",
+                  "full_name": staff_username, "role": "admin"},
+        )
+        ok &= check(reg_admin_try.status_code == 422, f"注册带 role=admin → HTTP {reg_admin_try.status_code}（拒绝自注册管理员）")
+        reg = c.post(
+            "/api/v1/auth/register",
+            json={"username": staff_username, "password": "Passw0rd!", "full_name": staff_username},
+        )
+        nurse_user = reg.json() if reg.status_code == 201 else {}
+        ok &= check(reg.status_code == 201 and nurse_user.get("role") == "staff",
+                    f"注册默认角色=staff（HTTP {reg.status_code}）")
+        nurse_id = nurse_user.get("id")
         admin = c.post(
             "/api/v1/auth/login",
-            json={"username": f"smoke_admin_{suffix}", "password": "Passw0rd!"},
+            json={"username": admin_username, "password": "Passw0rd!"},
         ).json()["access_token"]
         staff = c.post(
             "/api/v1/auth/login",
-            json={"username": f"smoke_nurse_{suffix}", "password": "Passw0rd!"},
+            json={"username": staff_username, "password": "Passw0rd!"},
         ).json()["access_token"]
         ok &= check(bool(admin and staff), "管理员与医护 token 已获取")
 
@@ -195,10 +229,11 @@ def main() -> int:
 
         print("[11] 非归属人不得确认 → 404")
         other = f"smoke_other_{suffix}"
-        c.post(
+        other_reg = c.post(
             "/api/v1/auth/register",
-            json={"username": other, "password": "Passw0rd!", "full_name": other, "role": "staff"},
+            json={"username": other, "password": "Passw0rd!", "full_name": other},
         )
+        other_id = other_reg.json().get("id") if other_reg.status_code == 201 else None
         other_token = c.post(
             "/api/v1/auth/login", json={"username": other, "password": "Passw0rd!"}
         ).json()["access_token"]
@@ -378,13 +413,52 @@ def main() -> int:
         )
         c.cookies.set("qh_admin", staff)  # 模拟令牌被写入：页面级兜底必须 403
         ok &= check(c.get("/admin").status_code == 403, "staff cookie 访问 /admin → 403 页面")
+        ok &= check(c.get("/admin/users").status_code == 403, "staff cookie 访问 /admin/users → 403 页面")
         c.cookies.clear()
         ok &= check(c.post("/admin/login", data={"username": f"smoke_admin_{suffix}", "password": "Passw0rd!"}).status_code == 303,
                     "管理员登录 → 303 写 cookie")
         c.cookies.set("qh_admin", admin)
-        for path in ("/admin", "/admin/kb", "/admin/prompts", "/admin/audit"):
+        for path in ("/admin", "/admin/kb", "/admin/prompts", "/admin/audit", "/admin/users"):
             page = c.get(path)
             ok &= check(page.status_code == 200, f"GET {path} → 200")
+        c.cookies.clear()
+
+        print("[21b] 用户与授权：授予 / 回收 / 防呆 / 启停")
+        c.cookies.set("qh_admin", admin)
+
+        def _loc(resp: httpx.Response) -> str:
+            return urllib.parse.unquote(resp.headers.get("location", ""))
+
+        # 防呆 1：不能修改自己的角色（把自己降级 = 把自己锁在门外）
+        self_demote = c.post(f"/admin/users/{admin_id}/role", data={"role": "staff"})
+        ok &= check(
+            self_demote.status_code == 303 and "不能修改自己" in _loc(self_demote),
+            "防呆：管理员不能修改自己的角色",
+        )
+        # 授予：医护 → 管理员；回收：管理员 → 医护
+        promote = c.post(f"/admin/users/{nurse_id}/role", data={"role": "admin"})
+        ok &= check(promote.status_code == 303 and "管理员" in _loc(promote),
+                    "授权：医护 → 管理员")
+        # 刚授权的角色以数据库为准：旧 token 里的 role 不作数——医护 token 立刻能进接口级 admin 校验？
+        # （require_admin 每次查库，因此 nurse 的新 token 才有 admin 权限；旧 token 仍是 staff —— 不测这个，只验页面）
+        demote = c.post(f"/admin/users/{nurse_id}/role", data={"role": "staff"})
+        ok &= check(demote.status_code == 303 and "医护" in _loc(demote),
+                    "回收：管理员 → 医护")
+        # 防呆 2 + 启停闭环：停用账号立即无法登录，启用后恢复
+        disable = c.post(f"/admin/users/{other_id}/status", data={"status": "disabled"})
+        login_disabled = c.post("/api/v1/auth/login",
+                                json={"username": other, "password": "Passw0rd!"})
+        ok &= check(
+            disable.status_code == 303 and login_disabled.status_code == 403,
+            f"停用账号 → 立即无法登录（HTTP {login_disabled.status_code}）",
+        )
+        enable = c.post(f"/admin/users/{other_id}/status", data={"status": "active"})
+        login_back = c.post("/api/v1/auth/login",
+                            json={"username": other, "password": "Passw0rd!"})
+        ok &= check(
+            enable.status_code == 303 and login_back.status_code == 200,
+            "重新启用后可正常登录",
+        )
         c.cookies.clear()
 
         # ---------------- 阶段 4：自主智能体（P1：只读链路 + 审计 + 回放） ----------------

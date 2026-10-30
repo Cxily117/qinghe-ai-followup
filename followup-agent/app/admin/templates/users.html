@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}用户与授权{% endblock %}
+{% block sub %}查看全部账号；授予或回收管理员、启用或停用账号（系统始终保留至少一名可用管理员）{% endblock %}
+
+{% block body %}
+<div class="card" style="margin-bottom:16px">
+  <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:13px;color:var(--ink-2)">
+    <span>账号总数 <b style="color:var(--ink)">{{ users|length }}</b></span>
+    <span>可用管理员 <b style="color:var(--ink)">{{ active_admins }}</b></span>
+    <span style="color:var(--ink-3)">注册开放的是医护账号；管理员身份只能在这里授予，或冷启动时由系统引导产生</span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>登录名</th><th>姓名</th><th>角色</th><th>科室</th>
+          <th>状态</th><th>注册时间</th><th>授权操作</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for u in users %}
+        <tr>
+          <td class="mono">{{ u.id }}</td>
+          <td>{{ u.username }}</td>
+          <td>{{ u.full_name or '—' }}</td>
+          <td>
+            {% if u.role == 'admin' %}
+              <span class="pill info">管理员</span>
+            {% else %}
+              <span class="pill muted">医护</span>
+            {% endif %}
+          </td>
+          <td>{{ u.department or '—' }}</td>
+          <td>
+            {% if u.status == 'active' %}
+              <span class="pill ok">启用</span>
+            {% else %}
+              <span class="pill danger">停用</span>
+            {% endif %}
+          </td>
+          <td class="mono" style="font-size:11.5px">{{ u.created_at.strftime('%Y-%m-%d %H:%M') if u.created_at else '—' }}</td>
+          <td>
+            {% if u.id == user.id %}
+              <span style="color:var(--ink-3);font-size:12px">当前登录账号（不可自我操作）</span>
+            {% else %}
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              {# 角色授权：医护 ↔ 管理员 #}
+              <form class="inline-form" method="post" action="/admin/users/{{ u.id }}/role">
+                <select class="select" name="role" style="width:auto;padding:4px 8px">
+                  <option value="staff" {{ 'selected' if u.role == 'staff' }}>医护</option>
+                  <option value="admin" {{ 'selected' if u.role == 'admin' }}>管理员</option>
+                </select>
+                <button class="btn btn-sm" type="submit">保存角色</button>
+              </form>
+              {# 启停账号：停用后立即无法登录（角色以数据库为准，token 不作数） #}
+              <form class="inline-form" method="post" action="/admin/users/{{ u.id }}/status">
+                {% if u.status == 'active' %}
+                <button class="btn btn-sm btn-ghost" type="submit" name="status" value="disabled">停用</button>
+                {% else %}
+                <button class="btn btn-sm" type="submit" name="status" value="active">启用</button>
+                {% endif %}
+              </form>
+            </div>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="empty">还没有任何账号</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

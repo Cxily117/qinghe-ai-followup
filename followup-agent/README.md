@@ -105,16 +105,29 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | `GET /admin/prompts` | 提示词 | 左侧模板列表 / 右侧编辑器 + 版本历史（可回滚、可看 diff）+ 试跑 |
 | `GET /admin/audit` | 对话审计 | 医护、时间段、仅疑似、仅已标记筛选 + 风险标签 |
 | `GET /admin/audit/{session_id}` | 会话详情 | 逐条问答 + flags + 引用来源 + 右侧标记面板（留操作人痕迹） |
+| `GET /admin/users` | 用户与授权 | 全部账号一览（角色/科室/状态/注册时间）；授予或回收管理员、启用或停用 |
 
 访问控制：Cookie 里的 JWT 校验 `role=admin`；staff 携带有效 token 访问页面 → 403 页并引导至问答端。
 接口层同样由 `require_admin` 兜底，**页面和接口是两道独立闸门**，任何一道都不依赖前端隐藏按钮。
+
+### 角色与授权（管理员系统）
+
+- **注册只发医护**：`POST /auth/register` 的 `role` 字面量收窄为 `staff`，带 `role=admin` 直接 422。
+  之前"演示允许自注册 admin"的口子已收掉——谁能自己发自己管理员，权限模型就失效了。
+- **管理员身份只有两个来源**：① 已有管理员在后台「用户与授权」页授予；
+  ② 冷启动引导——系统一个管理员都没有时，首个注册账号自动成为管理员（仅此一次）；
+  忘记密码/唯一管理员被停用时，从服务器本地跑 `python scripts/create_admin.py` 补救（幂等）。
+- **授权动作有防呆**（`user_service.set_role / set_status`）：
+  不能操作自己的账号；系统始终保留至少一名可用管理员，最后一个 admin 不可降级/停用；
+  停用立即生效——登录与页面鉴权都以数据库 `status` 为准，不信任 token。
+- 表结构沿用 `users.role / users.status`，无迁移。
 
 ## 接口清单
 
 | 方法 | 路径 | 说明 | 权限 |
 |---|---|---|---|
 | GET | `/health` | 健康检查（含当前 provider） | 公开 |
-| POST | `/api/v1/auth/register` | 注册（演示允许注册 admin） | 公开 |
+| POST | `/api/v1/auth/register` | 注册（只发医护；系统零管理员时首个注册自动成为管理员） | 公开 |
 | POST | `/api/v1/auth/login` | 登录换取 JWT | 公开 |
 | GET | `/api/v1/auth/me` | 当前用户 | 登录 |
 | POST | `/api/v1/kb/documents` | 上传制度文档（md/txt/**pdf**，自动切片+向量化，落 draft） | 管理员 |
@@ -378,7 +391,7 @@ POST /tasks            → draft ──confirm（人工）──→ confirmed（
 
 ```bash
 uvicorn app.main:app --port 8000 &
-python scripts/smoke_test.py --base-url http://127.0.0.1:8000        # 26 步：接口与页面
+python scripts/smoke_test.py --base-url http://127.0.0.1:8000        # 27 段 81 断言：接口与页面
 python scripts/trajectory_test.py --base-url http://127.0.0.1:8000   # 三条轨迹：过程与闸门
 ```
 
@@ -392,8 +405,9 @@ python scripts/trajectory_test.py --base-url http://127.0.0.1:8000   # 三条轨
 **管理后台（staff 登后台被拒 / 接口 403 / 上传 md 切片 / 删除已发布 409 / 提示词保存新版本 / 缺约束 422 / 问答 meta 记录新版本 / 审计筛选疑似 / 标记与撤销 / 各页面渲染 200）** →
 **智能体（SSE 事件完整 / 最终答案只发一个事件 / final_text 无重复 / 回放工具链首个必为
 search_policy / 审计入参不含原始住院号 / 他人 run 404）** →
-**质控报表（六组指标齐全 / days 钳制 422 / staff 403 / CSV 带 BOM / 后台页面渲染 / 越权 403）**。
-退出码 0 = 全绿（共 26 步）。每次运行会埋一个唯一编号提问，避免被库里历史文档干扰。
+**质控报表（六组指标齐全 / days 钳制 422 / staff 403 / CSV 带 BOM / 后台页面渲染 / 越权 403）** →
+**用户与授权（注册 role=admin 422 / 默认 staff / 授予与回收管理员 / 不能操作自己 / 停用立即无法登录 / 启用恢复）**。
+退出码 0 = 全绿（27 段 81 断言）。每次运行会埋一个唯一编号提问，避免被库里历史文档干扰。
 
 ### D6 质控指标口径（六组）
 
@@ -468,7 +482,8 @@ followup-agent/
 │   └── services/             # knowledge · chat · qa · task · prompt · audit · doc_parser · agent
 ├── alembic/                  # env.py（URL 从 Settings 注入）+ versions/0001–0004
 ├── docs/agent-trajectories.md  # ★ 三条典型轨迹（含 SSE 与审计行示例）
-├── scripts/smoke_test.py     # 端到端冒烟（26 步）
+├── scripts/smoke_test.py     # 端到端冒烟（27 段 81 断言）
+├── scripts/create_admin.py   # 管理员引导：本地直连建号/重置密码（幂等）
 ├── scripts/check_llm.py      # ★ Key/模型体检：配置·对话·向量维度，一条命令出结论
 ├── scripts/trajectory_test.py  # ★ 三条轨迹的过程断言（真实模型下自动跳过）
 ├── scripts/reindex_embeddings.py # ★ 换 embedding 后重建切片向量

@@ -32,7 +32,7 @@ from app.core.deps import DbDep
 from app.core.errors import AppError
 from app.core.security import create_access_token, decode_token, verify_password
 from app.models.user import User
-from app.services import audit_service, knowledge_service, prompt_service
+from app.services import audit_service, knowledge_service, prompt_service, user_service
 from app.services.doc_parser import SUPPORTED_EXT, extract_text
 
 logger = logging.getLogger(__name__)
@@ -546,6 +546,65 @@ async def prompts_preview(
     return await _render_prompts(
         request, db, user, preview=preview, draft_content=content, draft_question=question
     )
+
+
+# ------------------------------------------------------------------ 用户与授权
+
+
+@router.get("/admin/users", response_class=HTMLResponse)
+async def users_page(request: Request, db: DbDep):
+    """用户与授权：查看全部账号，授予/回收管理员、启用/停用。
+
+    授权动作只在这一个页面做，且有防呆（见 user_service）：
+    不能操作自己、系统必须保留至少一名可用管理员。
+    """
+    user, blocked = await _guard(request, db)
+    if blocked:
+        return blocked
+    rows = (
+        (await db.execute(select(User).order_by(User.id))).scalars().all()
+    )
+    active_admins = sum(1 for u in rows if u.role == "admin" and u.status == "active")
+    return _render(
+        request,
+        "users.html",
+        user=user,
+        nav="users",
+        users=rows,
+        active_admins=active_admins,
+    )
+
+
+@router.post("/admin/users/{user_id}/role")
+async def user_set_role(request: Request, user_id: int, db: DbDep, role: str = Form(...)):
+    operator, blocked = await _guard(request, db)
+    if blocked:
+        return blocked
+    target = await db.get(User, user_id)
+    if target is None:
+        return _back("/admin/users", err="账号不存在，可能已被删除")
+    try:
+        await user_service.set_role(db, target, role, operator)
+    except AppError as exc:
+        return _back("/admin/users", err=exc.message)
+    label = "管理员" if role == "admin" else "医护"
+    return _back("/admin/users", msg=f"已将 {target.full_name or target.username} 的角色调整为{label}")
+
+
+@router.post("/admin/users/{user_id}/status")
+async def user_set_status(request: Request, user_id: int, db: DbDep, status: str = Form(...)):
+    operator, blocked = await _guard(request, db)
+    if blocked:
+        return blocked
+    target = await db.get(User, user_id)
+    if target is None:
+        return _back("/admin/users", err="账号不存在，可能已被删除")
+    try:
+        await user_service.set_status(db, target, status, operator)
+    except AppError as exc:
+        return _back("/admin/users", err=exc.message)
+    label = "启用" if status == "active" else "停用"
+    return _back("/admin/users", msg=f"账号 {target.username} 已{label}")
 
 
 # ------------------------------------------------------------------ 对话审计
