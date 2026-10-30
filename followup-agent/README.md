@@ -7,7 +7,7 @@ FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT + RAG + function calling + �
 - **D5**：对话生成随访任务草稿（function calling，**AI 只到 draft，confirmed 必须人工点**）✅
 - **阶段 3**：管理后台（知识库管理 / **提示词在线编辑、保存即生效** / 对话审计与高危标记）✅
 - **阶段 4 P1**：自主随访智能体（只读工具链 + 动态工具解锁 + 票据地基 + 工具步骤时间线 + 运行回放审计）✅
-- **阶段 4 P2/P3**：校验闸门 + 写操作解锁（创建草稿）/ 红旗升级 + 转人工 ⬜
+- **阶段 4 P2/P3**：执行循环（5 轮 + 逐轮决策日志）/ 合规校验闸门 / **创建草稿强制中断等人工确认** / 红旗评估与升级 ✅
 - **D6**：质控报表 ⬜（审计页已具备数据面）
 
 ## 快速启动（开发态，SQLite 零依赖）
@@ -94,8 +94,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | POST | `/api/v1/chat/sessions` | 新建会话 | 登录 |
 | GET | `/api/v1/chat/sessions` | 我的会话列表 | 登录 |
 | GET | `/api/v1/chat/sessions/{id}/messages` | 会话消息（含溯源 meta） | 登录（仅本人） |
-| POST | `/api/v1/agent/chat` | **智能体问答（SSE，含 step 工具步骤事件）** | 登录 |
-| GET | `/api/v1/agent/runs/{run_uid}` | 运行回放（逐个工具的脱敏入参/结果摘要/票据） | 本人/管理员 |
+| POST | `/api/v1/agent/chat` | **智能体问答（SSE，含 step 工具步骤与 confirm_required 确认事件）** | 登录 |
+| GET | `/api/v1/agent/runs/{run_uid}` | 运行回放（逐轮决策 / 脱敏入参 / 结果摘要 / 票据指纹 / 确认单） | 本人/管理员 |
+| POST | `/api/v1/agent/runs/{run_uid}/confirm` | **确认或取消待落库的随访草稿**（唯一能写出草稿的智能体路径） | 本人/管理员 |
 | GET | `/api/v1/tasks/drafts` | 我的任务草稿（`?status_filter=draft`） | 登录 |
 | POST | `/api/v1/tasks` | **生成任务草稿**（function calling，只出 draft） | 登录 |
 | GET | `/api/v1/tasks/{id}` | 草稿详情（含 `content.ai` 溯源） | 归属人/管理员 |
@@ -128,11 +129,64 @@ event: step        data: {"seq":1,"tool":"resolve_patient","status":"ok","detail
 event: step        data: {"seq":2,"tool":"search_policy","status":"blocked","label":"已拦截越权调用"}
 ```
 
-## 阶段 4：自主随访智能体（P1 已交付）
+## 阶段 4：自主随访智能体
 
 `/chat`（固定流程 RAG）与 `/agent/chat`（自主决策智能体）**刻意并存**：
 前者链路短、延迟低、可解释，覆盖绝大多数制度问答；后者能查患者、能多次检索、能判合规，
 但延迟更高、路径不固定。两条路可一键切换，也便于 A/B 对比。
+
+### 为什么自建 Harness，而不是 LangGraph / AutoGen / Dify
+
+这一个流程用框架是负收益，四个理由（代码见 `app/agents/harness.py` 文件头）：
+
+1. **闸门必须是能力裁剪，不是图上的一条边。** 我们要的是"没校验就看不到创建工具" + 票据验签。
+   图的边可以绕过（模型照样能调工具），最终还得在工具内部再写一遍，框架只是多一层抽象。
+2. **审计字段是我们自定义的。** `decision / args_redacted / result_digest / ticket_id` 是为"能向医务处举证"设计的，
+   框架的 trace 格式要落成这些字段仍需大量映射。
+3. **院内环境要可解释、可离线。** 自建 Harness 约 200 行、零新依赖；引入框架要多 20+ 个包和一套概念。
+4. **降级要一键。** `AGENT_MODE=strict` 只下发只读工具，在自建里是一个参数，在框架里要重画一张图。
+
+代价也写清楚：没有现成的 checkpoint/断点续跑、并行工具、可视化 trace。本流程 ≤5 轮、串行、单写操作，用不上。
+将来做多智能体协作时再换框架不迟——`dispatch` 与 `RoundRecord` 两个契约是稳定的，替换的是执行器不是业务。
+
+### 执行循环：最多 5 轮，每轮一条决策日志
+
+```
+模型决策 ─► 有 tool_calls ─► 校验工具可见性 ─► 执行 ─► 结果回填 ─┐
+   ▲                                                            │
+   └────────────────────────────────────────────────────────────┘
+          └─ 无 tool_calls ─► 最终答复（结束）
+          └─ 写操作返回 pending_confirm ─► 挂起等人工确认（结束）
+```
+
+- 一轮只执行一个工具：顺序约束要求"一步一验证"，并发会打乱因果链。
+- 第 5 轮仍在调工具 → 直接转人工（`max_steps`），不无限烧钱。
+- **每轮落 `agent_tool_calls` 一行**：`decision`（tool_call / blocked / final / confirm）、
+  工具名、脱敏入参、模型本轮原话、耗时、结果摘要、票据指纹。这是审计分析的数据源。
+
+### 写操作闸门：创建草稿前强制中断
+
+`create_followup_task_draft` 的执行体**不写库**，只做三件事：验票（一次性）→ 归一化草稿 → 返回预览。
+Harness 看到 `pending_confirm` 立刻停止循环，把草稿内容以 `confirm_required` 事件推给前端卡片；
+草稿内容存进 `agent_confirmations`（pending，10 分钟有效），run 置 `pending_confirm`。
+
+只有 `POST /agent/runs/{uid}/confirm` 能把它变成 `followup_task_drafts`（**状态仍是 draft**）。
+模型既没有确认工具、也没有 HTTP 能力，"自己确认自己"在结构上不成立——
+这比在提示词里写十遍"不要自动确认"可靠。
+
+拒绝"先建 draft 再标待确认"：草稿一旦进库就会被任务列表读走，确认前不存在更干净。
+
+### 三条典型轨迹
+
+`docs/agent-trajectories.md` 给出完整预期轨迹（每轮决策 / 工具 / 参数 / SSE / 审计行）：
+
+| 轨迹 | 输入 | 预期工具序列 |
+|---|---|---|
+| A 只查规范 | 心梗患者出院 30 天随访要问哪些内容 | `search_policy` |
+| B 新建随访 | 帮我新建这位冠心病出院患者的随访记录 | `resolve_patient → search_policy → check_followup_rule → create_followup_task_draft`（然后挂起等确认） |
+| C 红旗症状 | 患者说持续胸痛，需要怎么处理 | `assess_red_flag → search_policy`（不建草稿） |
+
+`scripts/trajectory_test.py` 会把这三条真跑一遍并断言序列与落库行为。
 
 ### 工具清单与调用顺序约束
 
@@ -142,9 +196,9 @@ event: step        data: {"seq":2,"tool":"search_policy","status":"blocked","lab
 | `search_policy` | 读 | 制度检索（允许模型改写 query 重查，单轮最多 3 次） |
 | `list_existing_tasks` | 读 | 查该患者已有随访任务，防重复建 |
 | `assess_red_flag` | 读 | 红旗症状判定（P3 接升级链路） |
-| `check_followup_rule` | 判定 | 对照制度判定方案合规，**通过后签发 rule_ticket** |
-| `create_followup_task_draft` | 写 | **必须持有效 rule_ticket**（P2 解锁） |
-| `escalate_to_clinician` | 写 | 升级专科医生，需 risk/rule_ticket（P3） |
+| `check_followup_rule` | 判定 | 对照制度判定方案合规，**通过后签发 rule_ticket**（规则见 `rules.py`） |
+| `create_followup_task_draft` | 写 | **持票 + 二次人工确认**：先挂起成确认单，人点了才落库（status=draft） |
+| `escalate_to_clinician` | 写 | 升级专科医生，需 risk/rule_ticket（一次性消费） |
 | `handoff_to_human` | 兜底 | 无法处理时转人工 |
 
 **顺序约束不靠提示词自觉，靠三层机制**：
@@ -276,7 +330,8 @@ POST /tasks            → draft ──confirm（人工）──→ confirmed（
 
 ```bash
 uvicorn app.main:app --port 8000 &
-python scripts/smoke_test.py --base-url http://127.0.0.1:8000
+python scripts/smoke_test.py --base-url http://127.0.0.1:8000        # 24 步：接口与页面
+python scripts/trajectory_test.py --base-url http://127.0.0.1:8000   # 三条轨迹：过程与闸门
 ```
 
 覆盖：健康检查 → 注册登录 → 上传(draft) → **发布前提问不命中该文档** → 发布 →
@@ -291,7 +346,7 @@ python scripts/smoke_test.py --base-url http://127.0.0.1:8000
 resolve_patient / 审计入参不含原始住院号 / 他人 run 404）**。
 退出码 0 = 全绿（共 24 步）。每次运行会埋一个唯一编号提问，避免被库里历史文档干扰。
 
-## 数据模型（11 张表）
+## 数据模型（12 张表）
 
 前 6 张：`users` / `sessions` / `messages` / `kb_documents` / `kb_chunks` / `followup_task_drafts`
 详见 `随访智能体技术架构方案.md` 第 4 节。
@@ -304,7 +359,9 @@ resolve_patient / 审计入参不含原始住院号 / 他人 run 404）**。
   `marked_by` / `created_at` / `revoked_by` / `revoked_at`。「撤销」是软撤回，记录永不删除。
 
 阶段 4 新增 3 张（迁移 `0003`）：**`agent_runs`**（每轮智能体运行：route / steps / flags / prompt_version）、
-**`agent_tool_calls`**（逐工具脱敏入参与结果摘要）、**`ticket_nonces`**（票据 nonce 一次性防重放）。
+**`agent_tool_calls`**（逐轮决策：decision / 脱敏入参 / 结果摘要 / 票据指纹）、**`ticket_nonces`**（票据一次性防重放）。
+迁移 `0004` 再新增 **`agent_confirmations`**（待确认草稿：payload / 有效期 / 决策人 / 落库草稿 id），
+并给 `agent_tool_calls` 补 `decision` / `model_note` 两列。
 
 迁移时写入两版种子：`v1` = 你给的默认模板（生效），`v0` = 原 `policy_qa.md` v3 内容（历史存档）。
 
@@ -337,16 +394,20 @@ followup-agent/
 │   ├── models/               # 11 张表 ORM（含 prompt_templates / chat_audit_marks / agent_*）
 │   ├── schemas/              # Pydantic DTO
 │   ├── agents/               # ★ 智能体层
+│   │   ├── harness.py        #   ★ 执行循环（≤5 轮 / 逐轮 RoundRecord / 写操作中断）
+│   │   ├── runtime.py        #   状态机 + 票据签发验签 + 一次性消费 + 动态工具解锁
+│   │   ├── rules.py          #   ★ 合规规则引擎（必检节点/区间/渠道/红旗词表）
+│   │   ├── handlers.py       #   工具执行体（查患者/检索/校验/挂起建草稿/升级）
 │   │   ├── gateway/          #   base(抽象，含 chat_tools 契约) · openai_provider · mock_provider · embedding
 │   │   ├── prompts/          #   __init__(文件兜底) · policy_qa.md · task_extract.md · agent_supervisor.md
-│   │   ├── tools.py          #   function calling 工具 schema（无 status 字段）+ 8 工具注册表
-│   │   ├── runtime.py        #   ★ 状态机 + 票据签发验签 + 动态工具解锁
-│   │   ├── handlers.py       #   ★ 工具处理器（resolve_patient / search_policy / check_followup_rule …）
+│   │   ├── tools.py          #   8 工具注册表（schema + 分类 + 解锁条件 + 模式裁剪）
 │   │   ├── rag.py            #   混合检索 + 提示词拼装（提示词由调用方传入）
 │   │   └── guardrails.py     #   输出护栏 + 红旗关键词
 │   └── services/             # knowledge · chat · qa · task · prompt · audit · doc_parser · agent
-├── alembic/                  # env.py（URL 从 Settings 注入）+ versions/0001,0002,0003
+├── alembic/                  # env.py（URL 从 Settings 注入）+ versions/0001–0004
+├── docs/agent-trajectories.md  # ★ 三条典型轨迹（含 SSE 与审计行示例）
 ├── scripts/smoke_test.py     # 端到端冒烟（24 步）
+├── scripts/trajectory_test.py  # ★ 三条轨迹的过程断言
 ├── docker-compose.yml        # pgvector/pgvector:pg16（5433）
 └── .env.example
 ```
@@ -358,10 +419,11 @@ followup-agent/
 - 单次检索最多扫描 `RAG_MAX_CANDIDATES=5000` 个切片。超过这个量级应改 pgvector HNSW 召回 topN + BM25 重排，
   替换 `app/agents/rag.py::_score_all` 一个函数即可。
 
-## 下一步（阶段 4 P2/P3 + D6）
+## 下一步（D6 + 已知边界）
 
-- **P2**：校验闸门 + 写操作解锁——`check_followup_rule` 真实发 rule_ticket，`create_followup_task_draft` 持票创建（票据验签已在 runtime 就位）
-- **P3**：红旗升级 + 转人工——`assess_red_flag` 接 `escalate_to_clinician` / `handoff_to_human` 链路
 - **D6**：质控报表（完成率、红旗升级率、无引用回答占比、**AI 草稿人工修改率**
-  ——基础字段已就位：`messages.meta.flags`、`followup_task_drafts.content.confirm`、`agent_runs.route`）
-- 真实模型联调待新 API Key（mock 下链路已全部验证）
+  ——基础字段已就位：`messages.meta.flags`、`followup_task_drafts.content.confirm`、
+  `agent_runs.route`、`agent_tool_calls.decision`（可直接统计 blocked 率 = 模型试图跳步的频率））
+- 真实模型联调待新 API Key（mock 下链路已全部验证，含三条轨迹）
+- 升级工单当前只生成编号并落审计（`ESC-xxxxxxxx`），未接院内通知通道/HIS 工单表
+- 规则档位目前内置骨科与冠心病两套（`rules.PLAN_PROFILES`），其他病种走"仅结构校验"并标记 `PROFILE_UNKNOWN`

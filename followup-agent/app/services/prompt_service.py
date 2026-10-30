@@ -274,3 +274,62 @@ async def ensure_seed(db: AsyncSession) -> None:
         )
         logger.info("提示词种子已写入：%s v1（%s 字）", name, len(text))
     await db.commit()
+    await _sync_file_versions(db)
+
+
+async def _sync_file_versions(db: AsyncSession) -> None:
+    """代码里升了 md 的 version 时，启动自动补一版并生效。
+
+    为什么需要它：种子只在"库里一条都没有"时写。智能体提示词在 P1 已种过 v1，
+    P2 把 md 升到 v2 后，库里的 v1 永远生效——改了等于没改，这是最难发现的一类 bug。
+
+    两条安全边界：
+      1. 只有 **文件版本号高于库内最大版本** 才补，管理员改出的更高版本不会被代码覆盖；
+      2. 正文与库内任一版本相同就跳过，避免每次重启都刷版本号。
+    """
+    for name in MANAGED_PROMPTS:
+        try:
+            file_prompt = load_prompt(name)
+        except FileNotFoundError:
+            continue
+        try:
+            file_version = int(str(file_prompt.version).lstrip("vV"))
+        except ValueError:
+            continue
+
+        max_version = (
+            await db.execute(
+                select(func.max(PromptTemplate.version)).where(PromptTemplate.name == name)
+            )
+        ).scalar() or 0
+        if file_version <= int(max_version):
+            continue
+
+        sha = _sha(file_prompt.text)
+        duplicated = (
+            await db.execute(
+                select(func.count(PromptTemplate.id)).where(
+                    PromptTemplate.name == name, PromptTemplate.content_sha == sha
+                )
+            )
+        ).scalar()
+        if duplicated:
+            continue
+
+        await db.execute(
+            update(PromptTemplate)
+            .where(PromptTemplate.name == name, PromptTemplate.is_active.is_(True))
+            .values(is_active=False)
+        )
+        db.add(
+            PromptTemplate(
+                name=name,
+                version=file_version,
+                content=file_prompt.text,
+                note=f"随代码升级：{name}.md {file_prompt.version}",
+                content_sha=sha,
+                is_active=True,
+            )
+        )
+        logger.info("提示词随代码升级：%s v%s → v%s", name, max_version, file_version)
+    await db.commit()

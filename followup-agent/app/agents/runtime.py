@@ -71,6 +71,8 @@ class RunState:
     # 已签发的票据（token 原文，供 handler 校验后放行）
     rule_ticket: str = ""
     risk_ticket: str = ""
+    # 规则指纹：票据里嵌的就是它，审计时用来对齐"当时按哪版规则/哪批条文算的"
+    rule_sha: str = ""
 
     # 路线摘要：按顺序记录调过的工具，用于审计与「跳步」检测
     route: list[str] = field(default_factory=list)
@@ -95,6 +97,7 @@ class RunState:
             "patient": bool(self.patient_id),
             "rule_ticket": bool(self.rule_ticket),
             "risk_ticket": bool(self.risk_ticket),
+            "rule_sha": self.rule_sha,
             "flags": sorted(self.flags),
         }
 
@@ -179,3 +182,41 @@ def verify_ticket(
 def ticket_digest(token: str) -> str:
     """票据摘要：审计表里只存摘要，不存原文（原文等于一张可重放的通行证）。"""
     return hashlib.sha256(token.encode()).hexdigest()[:16] if token else ""
+
+
+async def consume_ticket(
+    db,
+    token: str,
+    *,
+    kind: str,
+    patient_id: str | None = None,
+    rule_sha: str | None = None,
+) -> dict:
+    """验签 + 标记已用（一次性）。写操作入口必须调这个，不能只 verify。
+
+    分两步而不是一步：
+      1. verify_ticket 是纯计算（签名/过期/归属），不需要数据库，失败即拒；
+      2. nonce 落库靠唯一索引判重——`INSERT` 冲突就说明这张票用过了。
+         用数据库约束而不是"先查再写"，是因为并发下先查再写必然有窗口，
+         而"同一张票建两张草稿"正是要防的事故。
+    """
+    from datetime import datetime
+
+    from sqlalchemy.exc import IntegrityError
+
+    from app.models.agent import TicketNonce
+
+    payload = verify_ticket(token, kind=kind, patient_id=patient_id, rule_sha=rule_sha)
+    db.add(
+        TicketNonce(
+            nonce=str(payload.get("n") or ""),
+            kind=kind,
+            used_at=datetime.now(),
+        )
+    )
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise AppError("TICKET_REPLAYED")
+    return payload

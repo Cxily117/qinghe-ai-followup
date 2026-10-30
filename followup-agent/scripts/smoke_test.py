@@ -416,11 +416,20 @@ def main() -> int:
                     "final_text 无首尾重复（回答重复回归）")
         ok &= check(bool(done_ev.get("flags", {}).get("tool_steps")), f"flags.tool_steps={done_ev.get('flags', {}).get('tool_steps')}")
 
-        print("[23] 智能体回放：工具明细 + 审计脱敏（不留患者原始住院号）")
+        print("[23] 智能体回放：逐轮决策日志 + 审计脱敏（不留患者原始住院号）")
         replay = c.get(f"/api/v1/agent/runs/{run_uid}", headers={"Authorization": f"Bearer {staff}"}).json()
         tools_used = [t["tool"] for t in replay.get("tool_calls", [])]
         ok &= check(bool(tools_used), f"工具调用链={tools_used}")
-        ok &= check(tools_used[0] == "resolve_patient", f"首个工具={tools_used[0]}（先识别患者再检索）")
+        # 轨迹 A 语义：只问制度时不该去碰业务工具（不解析患者、不校验、不建草稿）
+        ok &= check(
+            tools_used == ["search_policy"],
+            f"仅检索制度，未调用业务工具：{tools_used}",
+        )
+        rounds = replay.get("rounds") or []
+        ok &= check(
+            len(rounds) >= 1 and all(r.get("decision") and r.get("latency_ms") is not None for r in rounds),
+            f"逐轮日志 {len(rounds)} 条，含 decision/耗时",
+        )
         args_blob = json.dumps(replay.get("tool_calls", []), ensure_ascii=False)
         ok &= check(patient_id not in args_blob, "审计 args_redacted 不含原始住院号（PHI 脱敏生效）")
 

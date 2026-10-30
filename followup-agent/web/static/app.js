@@ -341,6 +341,91 @@
         scrollToBottom();
       },
 
+      /**
+       * 待确认草稿卡片（智能体写操作的唯一出口）。
+       *
+       * 为什么卡片必须出现在气泡里而不是弹窗：
+       * 医护需要边看制度引用边核对节点，"确认"这个动作要有上下文；
+       * 弹窗一旦遮住回答，人只会条件反射点确定。
+       *
+       * 后端在发出 confirm_required 时已经**停止**了智能体循环，
+       * 这里点不点、点哪个，都不会再触发模型——确认是真人的决定。
+       */
+      showConfirm(data) {
+        const draft = data.draft || {};
+        const items = draft.items || [];
+        const card = document.createElement("div");
+        card.className = "confirm-card";
+
+        const rows = items
+          .map(
+            (it) =>
+              '<li><span class="d">第 ' +
+              esc(it.offset_days) +
+              ' 天</span><span class="n">' +
+              esc(it.name || "") +
+              '</span><span class="dt">' +
+              esc(it.due_date || "") +
+              "</span></li>"
+          )
+          .join("");
+
+        card.innerHTML =
+          '<div class="cc-head"><span class="cc-badge">待确认</span>' +
+          '<span class="cc-title">随访草稿（尚未写入系统）</span></div>' +
+          '<div class="cc-meta">患者 ' +
+          esc(draft.patient_ref || "-") +
+          " · " +
+          esc(draft.plan_type || "-") +
+          " · " +
+          items.length +
+          " 个节点</div>" +
+          '<ul class="cc-items">' +
+          rows +
+          "</ul>" +
+          '<div class="cc-note">确认后写入「随访任务草稿」，仍需你在任务列表点确认才算定稿；取消则什么都不留。</div>' +
+          '<div class="cc-actions">' +
+          '<button class="btn primary" type="button" data-act="confirm">确认保存草稿</button>' +
+          '<button class="btn ghost" type="button" data-act="cancel">取消</button>' +
+          "</div>";
+
+        const actions = card.querySelector(".cc-actions");
+        actions.addEventListener("click", async (e) => {
+          const btn = e.target.closest("button[data-act]");
+          if (!btn) return;
+          const act = btn.dataset.act;
+          actions.querySelectorAll("button").forEach((b) => (b.disabled = true));
+          btn.textContent = act === "confirm" ? "保存中…" : "取消中…";
+          try {
+            const r = await api("/agent/runs/" + data.run_uid + "/confirm", {
+              method: "POST",
+              body: { action: act, note: "" },
+            });
+            card.classList.add(act === "confirm" ? "done" : "cancelled");
+            card.querySelector(".cc-badge").textContent = act === "confirm" ? "已保存" : "已取消";
+            actions.remove();
+            const tip = document.createElement("div");
+            tip.className = "cc-result";
+            tip.textContent =
+              act === "confirm"
+                ? "已保存为草稿 #" + (r.draft_id || "") + "，请到「任务草稿」核对后确认。"
+                : "已取消，本次没有写入任何记录。";
+            card.appendChild(tip);
+          } catch (err) {
+            actions.querySelectorAll("button").forEach((b) => (b.disabled = false));
+            btn.textContent = act === "confirm" ? "确认保存草稿" : "取消";
+            const tip = document.createElement("div");
+            tip.className = "cc-result err";
+            tip.textContent = (err && err.message) || "操作失败，请重试";
+            card.appendChild(tip);
+          }
+          scrollToBottom();
+        });
+
+        bubble.appendChild(card);
+        scrollToBottom();
+      },
+
       replace(text) {
         pending = "";
         shown = text || "";
@@ -538,6 +623,13 @@
 
         case "replace":
           turn.replace(data.text);
+          break;
+
+        case "confirm_required":
+          // 写操作被闸门拦下：智能体循环已终止，等真人在卡片上做决定
+          clearTimeout(slowTimer);
+          turn.setStatus("");
+          turn.showConfirm(data);
           break;
 
         case "done":

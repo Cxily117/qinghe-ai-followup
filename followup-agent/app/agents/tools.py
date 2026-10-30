@@ -256,7 +256,8 @@ TOOL_SPECS: dict[str, ToolSpec] = {
         name="assess_red_flag",
         schema=ASSESS_RED_FLAG,
         category=READ,
-        unlock=_has_patient,
+        # 红旗评估**不要求**先解析患者：医护说「患者持续胸痛」时，
+        # 抢救性判断不能因为"还没查到住院号"而卡住。患者维度只影响升级工单的归属。
         label="红旗症状评估",
     ),
     "check_followup_rule": ToolSpec(
@@ -291,8 +292,31 @@ TOOL_SPECS: dict[str, ToolSpec] = {
     ),
 }
 
-# P1 只开放只读链路：写工具即使条件满足也不下发，确保「问答不退化、写链路零风险」
+# P1 只读链路（保留为"降级/演练"用）：写工具即使条件满足也不下发
 P1_ENABLED = ("resolve_patient", "search_policy", "list_existing_tasks", "handoff_to_human")
+
+# P2/P3 全量链路：解锁条件仍然生效，只是不再人为裁剪。
+# 注意 handoff 永远在最后 —— 保证任何状态下都有一条"交还给人"的出口。
+ALL_TOOLS = (
+    "resolve_patient",
+    "search_policy",
+    "list_existing_tasks",
+    "assess_red_flag",
+    "check_followup_rule",
+    "create_followup_task_draft",
+    "escalate_to_clinician",
+    "handoff_to_human",
+)
+
+# strict 模式（AGENT_MODE=strict）：只下发只读工具，写操作全部留给人。
+# 这是上线初期的保险丝——出问题一个环境变量就能退回"问答机器人"。
+_STRICT_TOOLS = ("resolve_patient", "search_policy", "list_existing_tasks", "assess_red_flag", "handoff_to_human")
+
+
+def enabled_for_mode(mode: str) -> tuple[str, ...]:
+    """按运行模式决定"允许出现的工具全集"（单个工具再用 unlock 二次过滤）。"""
+    return _STRICT_TOOLS if (mode or "").lower() == "strict" else ALL_TOOLS
+
 
 # 兼容 D5 旧调用点
 TOOL_REGISTRY: dict[str, dict] = {name: spec.schema for name, spec in TOOL_SPECS.items()}
@@ -300,8 +324,13 @@ CREATE_TASK_DRAFT_NAME = "create_followup_task_draft"
 
 
 def available_specs(state: RunState, *, enabled: tuple[str, ...] | None = None) -> list[ToolSpec]:
-    """按运行状态下发工具集：未解锁的、超出次数的不出现。"""
-    allowed = enabled or P1_ENABLED
+    """按运行状态下发工具集：未解锁的、超出次数的不出现。
+
+    两层过滤，顺序不能反：
+      1. `enabled`（模式级）——strict 模式下写工具根本不进候选；
+      2. `spec.unlock(state)`（状态级）——没有 rule_ticket 时创建工具不出现。
+    """
+    allowed = enabled or ALL_TOOLS
     specs: list[ToolSpec] = []
     for name in allowed:
         spec = TOOL_SPECS.get(name)

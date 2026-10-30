@@ -20,6 +20,7 @@ from fastapi.responses import StreamingResponse
 from app.core.config import get_settings
 from app.core.deps import CurrentUser, DbDep
 from app.core.errors import AppError
+from app.schemas.agent import AgentConfirmIn
 from app.schemas.chat import AskRequest
 from app.services import agent_service, chat_service
 
@@ -69,7 +70,7 @@ async def agent_chat(payload: AskRequest, user: CurrentUser, db: DbDep):
 async def get_run(run_uid: str, user: CurrentUser, db: DbDep):
     from sqlalchemy import select
 
-    from app.models.agent import AgentRun, AgentToolCall
+    from app.models.agent import AgentConfirmation, AgentRun, AgentToolCall
 
     run = (
         await db.execute(select(AgentRun).where(AgentRun.run_uid == run_uid))
@@ -88,6 +89,14 @@ async def get_run(run_uid: str, user: CurrentUser, db: DbDep):
         )
     ).scalars().all()
 
+    confirmations = (
+        await db.execute(
+            select(AgentConfirmation)
+            .where(AgentConfirmation.run_id == run.id)
+            .order_by(AgentConfirmation.id.asc())
+        )
+    ).scalars().all()
+
     return {
         "run_uid": run.run_uid,
         "status": run.status,
@@ -97,6 +106,22 @@ async def get_run(run_uid: str, user: CurrentUser, db: DbDep):
         "prompt_version": run.prompt_version,
         "latency_ms": run.latency_ms,
         "created_at": run.created_at.isoformat() if run.created_at else None,
+        # 逐轮决策：decision 是这一轮"想干什么"，tool 才是"实际调了什么"
+        "rounds": [
+            {
+                "round": c.seq,
+                "decision": c.decision,
+                "tool": c.tool,
+                "ok": c.ok,
+                "error_code": c.error_code,
+                "args_redacted": c.args_redacted or {},
+                "model_note": c.model_note,
+                "result_digest": c.result_digest,
+                "ticket": c.ticket_id,
+                "latency_ms": c.latency_ms,
+            }
+            for c in calls
+        ],
         "tool_calls": [
             {
                 "seq": c.seq,
@@ -109,5 +134,40 @@ async def get_run(run_uid: str, user: CurrentUser, db: DbDep):
                 "latency_ms": c.latency_ms,
             }
             for c in calls
+            # decision=final 是"本轮不调工具、直接答复"，属于决策轮次而非工具调用；
+            # 混在 tool_calls 里会让"它到底调了什么工具"多出一条假记录。
+            if c.decision != "final"
+        ],
+        "confirmations": [
+            {
+                "id": x.id,
+                "status": x.status,
+                "items_count": x.items_count,
+                "draft_id": x.draft_id,
+                "rule_sha": x.rule_sha,
+                "decided_at": x.decided_at.isoformat() if x.decided_at else None,
+                "expires_at": x.expires_at.isoformat() if x.expires_at else None,
+            }
+            for x in confirmations
         ],
     }
+
+
+@router.post("/runs/{run_uid}/confirm", summary="确认/取消待落库的随访草稿")
+async def confirm_run(
+    run_uid: str, payload: AgentConfirmIn, user: CurrentUser, db: DbDep
+):
+    """只有这里能把智能体生成的草稿写进 `followup_task_drafts`。
+
+    模型在产出 `confirm_required` 时循环已终止，没有机会调用本接口；
+    即便它伪造一次工具调用，也没有这张确认单——闸门在状态机里，不在提示词里。
+    """
+    return await agent_service.decide_confirmation(
+        db,
+        run_uid=run_uid,
+        user_id=user.id,
+        username=user.username,
+        is_admin=user.role == "admin",
+        action=payload.action,
+        note=payload.note,
+    )

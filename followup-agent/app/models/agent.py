@@ -46,7 +46,7 @@ class AgentRun(Base):
 
 
 class AgentToolCall(Base):
-    """单次工具调用。seq 保证顺序可回放。"""
+    """单次工具调用。seq 即「第几轮决策」，保证顺序可回放。"""
 
     __tablename__ = "agent_tool_calls"
 
@@ -55,11 +55,17 @@ class AgentToolCall(Base):
         ForeignKey("agent_runs.id", ondelete="CASCADE"), index=True
     )
     seq: Mapped[int] = mapped_column(Integer, default=0)
+    # 这一轮模型做了什么：tool_call（调工具）/ blocked（调了未下发的工具）
+    # / final（给出答复、本轮无工具）/ confirm（写操作被闸门拦下、等待人工确认）
+    decision: Mapped[str] = mapped_column(String(16), default="tool_call")
     tool: Mapped[str] = mapped_column(String(48), index=True)
     args_redacted: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # 模型在本轮伴随工具调用说出的话（截断+脱敏）。复盘时能看出"它当时以为自己在干什么"，
+    # 单独存一列而不是塞进 args：args 是给工具的参数，两者语义不同。
+    model_note: Mapped[str] = mapped_column(String(300), default="")
     ok: Mapped[bool] = mapped_column(Boolean, default=True)
     error_code: Mapped[str] = mapped_column(String(48), default="")
-    # 结果摘要（前 200 字），全文不回灌数据库——工具结果可能是整段制度条文
+    # 结果摘要（前 250 字，已脱敏），全文不回灌数据库——工具结果可能是整段制度条文
     result_digest: Mapped[str] = mapped_column(String(256), default="")
     ticket_id: Mapped[str] = mapped_column(String(64), default="")
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
@@ -84,6 +90,45 @@ class TicketNonce(Base):
     used_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class AgentConfirmation(Base):
+    """「创建草稿」的人工确认单（阶段 4 · 写操作闸门）。
+
+    为什么要有这张表，而不是让模型"问一句再建"：
+      模型问完「可以吗」，下一轮完全可能自己认为"医护已经同意了"就直接建。
+      **确认必须是一个服务端可见的状态迁移**，不能是对话里的一句自然语言。
+      所以创建工具的执行结果是"挂起"：草稿内容先存到这里，run 状态置
+      pending_confirm，只有带着登录态的人调 /confirm 才能把它变成草稿行。
+
+    一次性 + 过期：status 只允许 pending → confirmed / cancelled，
+    过期后 confirmed 也走不通，必须重新生成（避免隔夜确认一张按旧制度算的方案）。
+    """
+
+    __tablename__ = "agent_confirmations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(
+        ForeignKey("agent_runs.id", ondelete="CASCADE"), index=True
+    )
+    # confirmed|cancelled|expired；pending 是常态
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    # 待落库的完整草稿参数（已归一化：日期算好、渠道白名单、节点排序去重）
+    payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    patient_ref: Mapped[str] = mapped_column(String(64), default="")
+    plan_type: Mapped[str] = mapped_column(String(64), default="")
+    rule_sha: Mapped[str] = mapped_column(String(32), default="")
+    items_count: Mapped[int] = mapped_column(Integer, default=0)
+    # 落库后的草稿 id（仅 confirmed 有值）
+    draft_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    decided_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    decided_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
