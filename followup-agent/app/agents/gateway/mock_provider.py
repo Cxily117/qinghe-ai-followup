@@ -8,12 +8,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from typing import AsyncIterator
 
 from app.agents.gateway.base import ChatResult, LLMProvider, ToolCall, timer_start
 
 REFUSAL_TEXT = "该问题超出当前知识库范围，请查阅制度原文或咨询随访管理员。"
+
+CREATE_DRAFT_NAME = "create_followup_task_draft"
 
 # 患者标识：兼容「患者编号 P1234」「住院号：ZY2026001」「病人 ID 8891」
 _PATIENT_RE = re.compile(
@@ -23,6 +26,60 @@ _PATIENT_RE = re.compile(
 _DAY_RE = re.compile(r"(?:第|术后|出院后)\s*(\d{1,3})\s*天|(\d{1,2})\s*周后|(\d{1,2})\s*个月")
 _CHANNEL_HINTS = (("电话", "phone"), ("短信", "sms"), ("微信", "wecom"), ("门诊", "outpatient"))
 _PLAN_HINTS = ("骨科", "关节", "髋", "膝", "脊柱", "肿瘤", "心内", "产科")
+
+
+def _agent_next_step(
+    messages: list[dict], user_content: str, tool_names: list[str]
+) -> tuple[ToolCall | None, str]:
+    """按「已调过哪些工具」推进 mock 的标准路径：解析患者 → 检索制度 → 给答复。
+
+    刻意不做的事：不会跳过 resolve_patient 直接给结论。
+    这样冒烟验证的是「顺序真的被执行了」，而不只是字段格式对不对。
+    """
+    called: set[str] = set()
+    for m in messages:
+        if m.get("role") == "assistant":
+            for tc in m.get("tool_calls") or []:
+                called.add((tc.get("function") or {}).get("name", ""))
+
+    tool_msgs = [m for m in messages if m.get("role") == "tool"]
+    last: dict = {}
+    if tool_msgs:
+        try:
+            last = json.loads(tool_msgs[-1].get("content") or "{}")
+        except Exception:
+            last = {}
+
+    patient = _PATIENT_RE.search(user_content)
+
+    if "resolve_patient" in tool_names and "resolve_patient" not in called:
+        if not patient:
+            return None, "请提供患者的住院号或门诊号，我需要先在系统里定位到这位患者，才能判断随访安排。"
+        return (
+            ToolCall(name="resolve_patient", arguments={"patient_ref": patient.group(1)}, raw_arguments="{}"),
+            "",
+        )
+
+    if "resolve_patient" in called and last.get("found") is False:
+        return None, f"没有在系统里找到这位患者（{last.get('reason', '未找到')}），请核对住院号后再试。"
+
+    if "search_policy" in tool_names and "search_policy" not in called:
+        return (
+            ToolCall(name="search_policy", arguments={"query": user_content[:80]}, raw_arguments="{}"),
+            "",
+        )
+
+    hits = last.get("hits") or []
+    if hits:
+        first = hits[0]
+        return None, (
+            f"（mock 模型·仅验证链路）根据《{first.get('doc_title', '制度')}》相关条款："
+            f"「{(first.get('content') or '')[:80]}……」[{first.get('n', 1)}]\n"
+            "如需完整条款，请查看引用的制度原文。"
+        )
+    if "search_policy" in called:
+        return None, REFUSAL_TEXT
+    return None, "已了解您的需求，请补充患者住院号或具体问题。"
 
 
 def _dialogue_only(user_content: str) -> str:
@@ -82,7 +139,7 @@ class MockProvider(LLMProvider):
             await asyncio.sleep(0.01)
             yield text[i : i + 12]
 
-    # ---------------- 工具调用（D5）----------------
+    # ---------------- 工具调用（D5 抽取 / 阶段 4 智能体）----------------
 
     async def chat_tools(
         self,
@@ -101,7 +158,25 @@ class MockProvider(LLMProvider):
         user_content = _dialogue_only(
             next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
         )
+        tool_names = [t["function"]["name"] for t in tools]
         name = tools[0]["function"]["name"] if tools else ""
+
+        await asyncio.sleep(0.05)
+
+        # 智能体链路：按「已调过哪些工具」推进，模拟一条标准路径
+        if CREATE_DRAFT_NAME not in tool_names and tool_names:
+            call, text = _agent_next_step(messages, user_content, tool_names)
+            return ChatResult(
+                text=text,
+                model="mock",
+                latency_ms=int((timer_start() - started) * 1000),
+                usage=None,
+                extra={
+                    "tool_calls": [call] if call else [],
+                    "finish_reason": "tool_calls" if call else "stop",
+                    "degraded": None,
+                },
+            )
 
         patient = _PATIENT_RE.search(user_content)
         offsets: list[int] = []

@@ -46,6 +46,17 @@ class Settings(BaseSettings):
     # ---- 知识库存储 ----
     kb_storage_dir: str = "data/kb"  # 原始文档落盘目录（不入库，仅留档）
 
+    # ---- Agent（阶段 4：自主随访智能体）----
+    agent_enabled: bool = True
+    # bounded = 模型在预置骨架内选路填参（默认）；strict = 骨架由代码跑，模型只解释
+    agent_mode: str = "bounded"
+    agent_max_steps: int = 6  # 单轮最多几轮「模型→工具」，防死循环与费用失控
+    agent_search_limit: int = 3  # 单轮最多检索几次（允许模型改写 query 重查）
+    agent_tool_result_chars: int = 600  # 单条工具结果回灌模型的截断长度
+    agent_ticket_ttl: int = 300  # 校验票据有效期（秒）
+    # 票据签名密钥：留空则由 jwt_secret 派生，生产建议单独配一个
+    agent_ticket_secret: str = ""
+
     @property
     def is_postgres(self) -> bool:
         """是否跑在 PostgreSQL 上——决定向量列用 pgvector 还是 JSON 降级。"""

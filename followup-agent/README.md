@@ -1,4 +1,4 @@
-# followup-agent · 阶段 3（D1–D5 + 管理后台）
+# followup-agent · 阶段 4（D1–D5 + 管理后台 + 智能体 P1）
 
 FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT + RAG + function calling + 原生 JS 前端 + Jinja2 管理后台。
 
@@ -6,6 +6,8 @@ FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT + RAG + function calling + �
 - **D3–D4**：知识库入库（切片→向量化→发布）+ `/chat` 流式 RAG（混合检索 + 护栏 + 溯源落库）✅
 - **D5**：对话生成随访任务草稿（function calling，**AI 只到 draft，confirmed 必须人工点**）✅
 - **阶段 3**：管理后台（知识库管理 / **提示词在线编辑、保存即生效** / 对话审计与高危标记）✅
+- **阶段 4 P1**：自主随访智能体（只读工具链 + 动态工具解锁 + 票据地基 + 工具步骤时间线 + 运行回放审计）✅
+- **阶段 4 P2/P3**：校验闸门 + 写操作解锁（创建草稿）/ 红旗升级 + 转人工 ⬜
 - **D6**：质控报表 ⬜（审计页已具备数据面）
 
 ## 快速启动（开发态，SQLite 零依赖）
@@ -92,6 +94,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | POST | `/api/v1/chat/sessions` | 新建会话 | 登录 |
 | GET | `/api/v1/chat/sessions` | 我的会话列表 | 登录 |
 | GET | `/api/v1/chat/sessions/{id}/messages` | 会话消息（含溯源 meta） | 登录（仅本人） |
+| POST | `/api/v1/agent/chat` | **智能体问答（SSE，含 step 工具步骤事件）** | 登录 |
+| GET | `/api/v1/agent/runs/{run_uid}` | 运行回放（逐个工具的脱敏入参/结果摘要/票据） | 本人/管理员 |
 | GET | `/api/v1/tasks/drafts` | 我的任务草稿（`?status_filter=draft`） | 登录 |
 | POST | `/api/v1/tasks` | **生成任务草稿**（function calling，只出 draft） | 登录 |
 | GET | `/api/v1/tasks/{id}` | 草稿详情（含 `content.ai` 溯源） | 归属人/管理员 |
@@ -114,6 +118,67 @@ event: end
 
 前端渲染建议：先渲染 `citations`（让用户看到"依据"），再按 `delta` 打字机式追加；
 收到 `replace` 就整体覆盖（拒答去引用、越界引用剔除、追加免责时会发生）。
+
+`/agent/chat` 在此之上多一种事件：`step`（工具步骤时间线）。
+
+```
+event: run         data: {"run_uid":"...","mode":"bounded"}
+event: step        data: {"seq":1,"tool":"resolve_patient","status":"start","label":"正在识别患者…"}
+event: step        data: {"seq":1,"tool":"resolve_patient","status":"ok","detail":{"found":true,"dept":"骨科"}}
+event: step        data: {"seq":2,"tool":"search_policy","status":"blocked","label":"已拦截越权调用"}
+```
+
+## 阶段 4：自主随访智能体（P1 已交付）
+
+`/chat`（固定流程 RAG）与 `/agent/chat`（自主决策智能体）**刻意并存**：
+前者链路短、延迟低、可解释，覆盖绝大多数制度问答；后者能查患者、能多次检索、能判合规，
+但延迟更高、路径不固定。两条路可一键切换，也便于 A/B 对比。
+
+### 工具清单与调用顺序约束
+
+| 工具 | 类别 | 说明 |
+|---|---|---|
+| `resolve_patient` | 读 | 住院号/姓名 → 患者档案（mock 患者库） |
+| `search_policy` | 读 | 制度检索（允许模型改写 query 重查，单轮最多 3 次） |
+| `list_existing_tasks` | 读 | 查该患者已有随访任务，防重复建 |
+| `assess_red_flag` | 读 | 红旗症状判定（P3 接升级链路） |
+| `check_followup_rule` | 判定 | 对照制度判定方案合规，**通过后签发 rule_ticket** |
+| `create_followup_task_draft` | 写 | **必须持有效 rule_ticket**（P2 解锁） |
+| `escalate_to_clinician` | 写 | 升级专科医生，需 risk/rule_ticket（P3） |
+| `handoff_to_human` | 兜底 | 无法处理时转人工 |
+
+**顺序约束不靠提示词自觉，靠三层机制**：
+
+1. **动态工具集**：每轮按状态机算出模型"此刻能看见的工具"。未过校验时，
+   `create_followup_task_draft` 根本不在 tool schema 里下发——模型没有语法去调它。
+   若模型仍试图调用（幻觉工具名），网关返回 `tool_unavailable` 并把 `blocked_tool_call` 写进 flags：
+   这就是"试图跳步"的审计证据。
+2. **HMAC 签名票据**：`check_followup_rule` 通过才签发 rule_ticket（5 分钟过期 + nonce 一次性 +
+   内嵌 patient_id/plan_type + 绑定制度版本 sha）。写工具入参必须携带票据，服务端验签，
+   不接受"模型口头说已通过"。
+3. **系统提示词硬约束**：`app/agents/prompts/agent_supervisor.md` 写明顺序强制段
+   （"创建前必须已收到校验通过"）、写操作只到草稿、调用前自检三句——作为第 1/2 层的补充而非替代。
+
+刻意**没有** `confirm_task` / `cancel_task` 工具：确认永远是人点按钮，与 D5 的状态机一脉相承。
+
+### 审计与回放
+
+- 每个工具调用落 `agent_tool_calls`：**脱敏后的入参**（住院号/姓名打码、长文本截断、
+  query 内嵌住院号也先掩码）+ 结果摘要（sha256 摘要而非原文）+ 票据指纹 + 耗时。
+  审计表不成为第二个 PHI 泄露面。
+- `GET /agent/runs/{run_uid}` 逐轮回放：调了什么工具、带了哪张票据、返回什么摘要。
+  本人可看自己的，管理员可看全部；他人访问一律 404（不暴露存在性）。
+- 三张新表（迁移 `0003`，不改旧表）：`agent_runs` / `agent_tool_calls` / `ticket_nonces`。
+
+### 前端：工具步骤时间线
+
+问答单页新增「标准问答 / 智能体」分段切换。智能体模式下，每个 `step` 事件实时渲染成时间线节点
+（开始 → 完成/拦截），最终答案仍走打字机；回看历史时时间线从 `meta.agent` 还原。
+
+### 智能体 SSE 收口约定（踩过的坑）
+
+最终答案此前没有流式吐过字，收口时**只发一个事件**：护栏改写过 → `replace`，未改写 → `delta`。
+两个都发会导致前端把整段答案显示两遍（`delta` 是追加语义）——冒烟 [22] 已加回归断言。
 
 ## D3–D4 的关键设计
 
@@ -221,10 +286,12 @@ python scripts/smoke_test.py --base-url http://127.0.0.1:8000
 **错误 envelope（空问题/超长/越权会话的 code 与中文 message）** →
 **引用原文接口（医护可读 published、不存在返回 CHUNK_NOT_FOUND）** →
 **前端托管（GET / 单页 + /static/app.js）** →
-**管理后台（staff 登后台被拒 / 接口 403 / 上传 md 切片 / 删除已发布 409 / 提示词保存新版本 / 缺约束 422 / 问答 meta 记录新版本 / 审计筛选疑似 / 标记与撤销 / 各页面渲染 200）**。
-退出码 0 = 全绿。每次运行会埋一个唯一编号提问，避免被库里历史文档干扰。
+**管理后台（staff 登后台被拒 / 接口 403 / 上传 md 切片 / 删除已发布 409 / 提示词保存新版本 / 缺约束 422 / 问答 meta 记录新版本 / 审计筛选疑似 / 标记与撤销 / 各页面渲染 200）** →
+**智能体（SSE 事件完整 / 最终答案只发一个事件 / final_text 无重复 / 回放工具链首个必为
+resolve_patient / 审计入参不含原始住院号 / 他人 run 404）**。
+退出码 0 = 全绿（共 24 步）。每次运行会埋一个唯一编号提问，避免被库里历史文档干扰。
 
-## 数据模型（8 张表）
+## 数据模型（11 张表）
 
 前 6 张：`users` / `sessions` / `messages` / `kb_documents` / `kb_chunks` / `followup_task_drafts`
 详见 `随访智能体技术架构方案.md` 第 4 节。
@@ -235,6 +302,9 @@ python scripts/smoke_test.py --base-url http://127.0.0.1:8000
   `(name, version)` 唯一；同一 `name` 只有一条 `is_active`（服务层事务保证）。
 - **`chat_audit_marks`**：`session_id` / `message_id`(可空) / `level`(`high_risk`|`watch`) / `note` /
   `marked_by` / `created_at` / `revoked_by` / `revoked_at`。「撤销」是软撤回，记录永不删除。
+
+阶段 4 新增 3 张（迁移 `0003`）：**`agent_runs`**（每轮智能体运行：route / steps / flags / prompt_version）、
+**`agent_tool_calls`**（逐工具脱敏入参与结果摘要）、**`ticket_nonces`**（票据 nonce 一次性防重放）。
 
 迁移时写入两版种子：`v1` = 你给的默认模板（生效），`v0` = 原 `policy_qa.md` v3 内容（历史存档）。
 
@@ -263,18 +333,20 @@ followup-agent/
 │   │   ├── templates/        #   base / login / dashboard / kb_list / kb_detail / prompts / audit_* / error
 │   │   └── static/admin.css
 │   ├── core/                 # config / security(JWT+PBKDF2) / database / deps(RBAC) / errors(统一错误码)
-│   ├── api/v1/               # auth · chat · kb · tasks · reports · prompts · audit
-│   ├── models/               # 8 张表 ORM（含 prompt_templates / chat_audit_marks）
+│   ├── api/v1/               # auth · chat · kb · tasks · reports · prompts · audit · agent
+│   ├── models/               # 11 张表 ORM（含 prompt_templates / chat_audit_marks / agent_*）
 │   ├── schemas/              # Pydantic DTO
 │   ├── agents/               # ★ 智能体层
 │   │   ├── gateway/          #   base(抽象，含 chat_tools 契约) · openai_provider · mock_provider · embedding
-│   │   ├── prompts/          #   __init__(文件兜底) · policy_qa.md · task_extract.md
-│   │   ├── tools.py          #   function calling 工具 schema（无 status 字段）
+│   │   ├── prompts/          #   __init__(文件兜底) · policy_qa.md · task_extract.md · agent_supervisor.md
+│   │   ├── tools.py          #   function calling 工具 schema（无 status 字段）+ 8 工具注册表
+│   │   ├── runtime.py        #   ★ 状态机 + 票据签发验签 + 动态工具解锁
+│   │   ├── handlers.py       #   ★ 工具处理器（resolve_patient / search_policy / check_followup_rule …）
 │   │   ├── rag.py            #   混合检索 + 提示词拼装（提示词由调用方传入）
 │   │   └── guardrails.py     #   输出护栏 + 红旗关键词
-│   └── services/             # knowledge · chat · qa · task · prompt · audit · doc_parser
-├── alembic/                  # env.py（URL 从 Settings 注入）+ versions/0001,0002
-├── scripts/smoke_test.py     # 端到端冒烟（21 步）
+│   └── services/             # knowledge · chat · qa · task · prompt · audit · doc_parser · agent
+├── alembic/                  # env.py（URL 从 Settings 注入）+ versions/0001,0002,0003
+├── scripts/smoke_test.py     # 端到端冒烟（24 步）
 ├── docker-compose.yml        # pgvector/pgvector:pg16（5433）
 └── .env.example
 ```
@@ -286,7 +358,10 @@ followup-agent/
 - 单次检索最多扫描 `RAG_MAX_CANDIDATES=5000` 个切片。超过这个量级应改 pgvector HNSW 召回 topN + BM25 重排，
   替换 `app/agents/rag.py::_score_all` 一个函数即可。
 
-## 下一步（D6）
+## 下一步（阶段 4 P2/P3 + D6）
 
+- **P2**：校验闸门 + 写操作解锁——`check_followup_rule` 真实发 rule_ticket，`create_followup_task_draft` 持票创建（票据验签已在 runtime 就位）
+- **P3**：红旗升级 + 转人工——`assess_red_flag` 接 `escalate_to_clinician` / `handoff_to_human` 链路
 - **D6**：质控报表（完成率、红旗升级率、无引用回答占比、**AI 草稿人工修改率**
-  ——基础字段已就位：`messages.meta.flags`、`followup_task_drafts.content.confirm`）
+  ——基础字段已就位：`messages.meta.flags`、`followup_task_drafts.content.confirm`、`agent_runs.route`）
+- 真实模型联调待新 API Key（mock 下链路已全部验证）

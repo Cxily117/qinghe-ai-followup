@@ -18,6 +18,8 @@
     sessions: [],
     sid: null,
     busy: false,
+    // qa = 固定流程 RAG（快、可解释）；agent = 会调工具的智能体（能查患者、能多次检索）
+    mode: "qa",
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -261,11 +263,15 @@
     bubble.className = "bubble";
     const statusEl = document.createElement("div");
     statusEl.className = "status";
+    // 工具步骤时间线：智能体模式下逐条追加，让"它在干什么"可见
+    const stepsEl = document.createElement("div");
+    stepsEl.className = "steps";
+    stepsEl.hidden = true;
     const answerEl = document.createElement("div");
     answerEl.className = "answer";
     const citesEl = document.createElement("div");
     citesEl.className = "citations";
-    bubble.append(statusEl, answerEl, citesEl);
+    bubble.append(stepsEl, statusEl, answerEl, citesEl);
     row.appendChild(bubble);
     messagesEl.appendChild(row);
 
@@ -304,6 +310,35 @@
         if (!text) return;
         pending += text;
         if (!raf) raf = requestAnimationFrame(tick);
+      },
+
+      /**
+       * 追加/更新一条工具步骤。
+       * 按 seq 归并：同一工具先发 start 再发 ok，落在同一行上更新状态，
+       * 不然后端每发两次事件就多出一行，时间线会翻倍。
+       */
+      addStep(ev) {
+        stepsEl.hidden = false;
+        let row = stepsEl.querySelector('[data-seq="' + ev.seq + '"]');
+        if (!row) {
+          row = document.createElement("div");
+          row.dataset.seq = ev.seq;
+          row.innerHTML = '<span class="dot"></span><span class="name"></span><span class="meta"></span>';
+          stepsEl.appendChild(row);
+        }
+        row.className = "step" + (ev.status === "start" ? "" : " " + ev.status);
+        row.querySelector(".name").textContent = ev.label || ev.tool || "";
+
+        const d = ev.detail || {};
+        let meta = "";
+        if (ev.status === "start") meta = "进行中…";
+        else if (ev.status === "blocked") meta = "未通过前置校验，已拦截";
+        else if (ev.tool === "resolve_patient") meta = d.found ? d.patient || "已定位" : "未找到该患者";
+        else if (ev.tool === "search_policy") meta = (d.hits || 0) + " 条条文";
+        else if (ev.tool === "list_existing_tasks") meta = "已排 " + (d.existing || 0) + " 个节点";
+        else if (ev.status === "error") meta = "执行失败";
+        row.querySelector(".meta").textContent = meta;
+        scrollToBottom();
       },
 
       replace(text) {
@@ -471,7 +506,17 @@
       switch (event) {
         case "session":
           if (data.session_id) state.sid = data.session_id;
-          turn.setStatus("正在检索随访规范…");
+          turn.setStatus(state.mode === "agent" ? "正在规划处理步骤…" : "正在检索随访规范…");
+          break;
+
+        case "run":
+          // 智能体已启动：它要先想清楚查什么，这段时间比固定流程长
+          turn.setStatus("正在规划处理步骤…");
+          break;
+
+        case "step":
+          turn.addStep(data);
+          if (data.status === "start") turn.setStatus(data.label || "处理中…");
           break;
 
         case "citations": {
@@ -535,15 +580,18 @@
 
     appendUser(question);
     const turn = createTurn();
-    turn.setStatus("正在检索随访规范…");
+    const agentMode = state.mode === "agent";
+    turn.setStatus(agentMode ? "正在规划处理步骤…" : "正在检索随访规范…");
 
     // 检索 + 建连超过 1.5 秒还没回音，补一句，避免用户以为卡死
     const slowTimer = setTimeout(() => {
-      turn.setStatus("正在检索随访规范…（制度条文较多，仍在检索）");
+      turn.setStatus(
+        agentMode ? "仍在处理（智能体可能正在多轮核对制度）…" : "正在检索随访规范…（制度条文较多，仍在检索）"
+      );
     }, 1500);
 
     try {
-      const res = await fetch(API + "/chat", {
+      const res = await fetch(API + (agentMode ? "/agent/chat" : "/chat"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -595,6 +643,28 @@
     send();
     autosize();
   });
+
+  /* ---------------------------------------------------------- 模式切换 */
+
+  const modeSeg = $("#mode-seg");
+  const modeHint = $("#mode-hint");
+  const MODE_HINT = {
+    qa: "固定流程：检索一次 → 依条文作答",
+    agent: "智能体：查患者 → 多轮检索 → 依条文作答（步骤可见）",
+  };
+
+  if (modeSeg) {
+    modeSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest(".seg-btn");
+      if (!btn || state.busy) return;
+      state.mode = btn.dataset.mode === "agent" ? "agent" : "qa";
+      modeSeg.querySelectorAll(".seg-btn").forEach((b) => {
+        b.classList.toggle("active", b.dataset.mode === state.mode);
+      });
+      if (modeHint) modeHint.textContent = MODE_HINT[state.mode];
+      input.focus();
+    });
+  }
 
   /* ---------------------------------------------------------- 启动 */
 

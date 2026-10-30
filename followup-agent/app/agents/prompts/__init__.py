@@ -21,13 +21,15 @@ PROMPT_DIR = Path(__file__).parent
 DEFAULT_POLICY_QA = """你是院内随访规范助手，只能依据检索到的随访制度条文作答；制度无对应内容时必须明确回复「随访规范中未查询到相关内容」；回答末尾自动附上引用文档来源，严禁编造随访标准与诊疗建议。"""
 
 # 目前受管的模板：key 与 prompts/<key>.md 同名
-MANAGED_PROMPTS = ("policy_qa", "task_extract")
+MANAGED_PROMPTS = ("policy_qa", "task_extract", "agent_supervisor")
 
 # 各模板的「关键约束」——保存时缺少这些语义就直接拒绝，见 prompt_service.validate
 REQUIRED_KEYWORDS: dict[str, tuple[tuple[str, ...], ...]] = {
     # policy_qa：必须约束「引用」与「拒答」，这两条是合规的根
     "policy_qa": (("引用",), ("未查询到", "未涉及", "超出", "未收录", "无法回答", "暂无")),
     "task_extract": (("草稿",), ("offset_days", "天数")),
+    # agent_supervisor：顺序与票据这两条不能被人从后台编辑时删掉
+    "agent_supervisor": (("rule_ticket",), ("不得", "禁止")),
 }
 
 

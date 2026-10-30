@@ -38,6 +38,7 @@ ERRORS: dict[str, tuple[int, str]] = {
     "DOC_NOT_FOUND": (404, "文档不存在"),
     "PROMPT_NOT_FOUND": (404, "提示词模板或指定版本不存在"),
     "MARK_NOT_FOUND": (404, "标记记录不存在或已撤销"),
+    "AGENT_RUN_NOT_FOUND": (404, "运行记录不存在或无权查看"),
     # 入参
     "QUESTION_EMPTY": (422, "问题不能为空"),
     "QUESTION_TOO_LONG": (422, "问题最多 2000 字，请精简后再问"),
@@ -53,6 +54,13 @@ ERRORS: dict[str, tuple[int, str]] = {
     "DOC_HAS_BEEN_PUBLISHED": (409, "已发布文档不能直接删除，请先归档下架"),
     "VALIDATION_ERROR": (422, "请求参数不合法"),
     "CONFLICT": (409, "当前状态不允许该操作"),
+    # 智能体校验闸门（阶段 4）
+    "AGENT_DISABLED": (403, "智能体模式未启用，请使用标准问答"),
+    "AGENT_TICKET_INVALID": (403, "校验票据无效，请重新执行制度校验"),
+    "AGENT_TICKET_EXPIRED": (403, "校验票据已过期（有效期 5 分钟），请重新校验"),
+    "AGENT_TICKET_MISMATCH": (403, "票据与当前患者不匹配，禁止跨患者使用"),
+    "TICKET_REPLAYED": (409, "该票据已使用过，不能重复创建草稿"),
+    "RULE_VERSION_STALE": (409, "制度版本已更新，请按最新条文重新校验"),
     # 上游与服务
     "LLM_UPSTREAM": (502, "模型调用失败，请稍后重试"),
     "KB_UNAVAILABLE": (502, "知识库服务异常，请稍后重试"),

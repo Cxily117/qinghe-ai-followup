@@ -1,4 +1,5 @@
 """模型包：集中 import 保证 Base.metadata 完整（Alembic autogenerate 依赖此文件）。"""
+from app.models.agent import AgentRun, AgentToolCall, TicketNonce
 from app.models.audit import ChatAuditMark
 from app.models.base import Base
 from app.models.chat import ChatSession, Message
@@ -17,4 +18,7 @@ __all__ = [
     "FollowupTaskDraft",
     "PromptTemplate",
     "ChatAuditMark",
+    "AgentRun",
+    "AgentToolCall",
+    "TicketNonce",
 ]

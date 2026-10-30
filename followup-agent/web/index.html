@@ -72,6 +72,13 @@
       </div>
 
       <form class="composer" id="composer">
+        <div class="mode-bar">
+          <div class="seg" id="mode-seg" role="tablist">
+            <button type="button" class="seg-btn active" data-mode="qa" role="tab">标准问答</button>
+            <button type="button" class="seg-btn" data-mode="agent" role="tab">智能体</button>
+          </div>
+          <span class="mode-hint" id="mode-hint">固定流程：检索一次 → 依条文作答</span>
+        </div>
         <textarea id="question" rows="1" placeholder="输入问题，Enter 发送，Shift + Enter 换行" maxlength="2000"></textarea>
         <div class="composer-side">
           <span class="counter" id="counter">0 / 2000</span>

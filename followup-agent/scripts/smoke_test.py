@@ -387,6 +387,47 @@ def main() -> int:
             ok &= check(page.status_code == 200, f"GET {path} → 200")
         c.cookies.clear()
 
+        # ---------------- 阶段 4：自主智能体（P1：只读链路 + 审计 + 回放） ----------------
+        print("[22] 智能体 SSE：事件完整、delta 只发一次（护栏改写走 replace，不得叠加）")
+        patient_id = "ZY2026001"  # mock 患者库中的真实患者
+        agent_events: list[dict] = []
+        with c.stream(
+            "POST",
+            "/api/v1/agent/chat",
+            headers={"Authorization": f"Bearer {staff}", "Accept": "text/event-stream"},
+            json={
+                "question": f"患者赵桂芳 住院号 {patient_id}，术后第5天想散步，可以吗？",
+            },
+        ) as r:
+            ok &= check(r.status_code == 200, f"POST /agent/chat → {r.status_code}")
+            for line in r.iter_lines():
+                if not line.startswith("data: "):
+                    continue
+                agent_events.append(json.loads(line[6:]))
+        types = [e["type"] for e in agent_events]
+        ok &= check({"session", "run", "step", "citations", "done"} <= set(types), f"事件序列={types}")
+        ok &= check(types.count("delta") + types.count("replace") == 1,
+                    f"最终答案只发一个事件（delta={types.count('delta')} replace={types.count('replace')}）")
+        done_ev = next(e for e in agent_events if e["type"] == "done")
+        run_uid = done_ev.get("run_uid", "")
+        final_text = done_ev.get("final_text", "")
+        half = len(final_text) // 2
+        ok &= check(len(final_text) > 20 and final_text[:half] != final_text[half:2 * half],
+                    "final_text 无首尾重复（回答重复回归）")
+        ok &= check(bool(done_ev.get("flags", {}).get("tool_steps")), f"flags.tool_steps={done_ev.get('flags', {}).get('tool_steps')}")
+
+        print("[23] 智能体回放：工具明细 + 审计脱敏（不留患者原始住院号）")
+        replay = c.get(f"/api/v1/agent/runs/{run_uid}", headers={"Authorization": f"Bearer {staff}"}).json()
+        tools_used = [t["tool"] for t in replay.get("tool_calls", [])]
+        ok &= check(bool(tools_used), f"工具调用链={tools_used}")
+        ok &= check(tools_used[0] == "resolve_patient", f"首个工具={tools_used[0]}（先识别患者再检索）")
+        args_blob = json.dumps(replay.get("tool_calls", []), ensure_ascii=False)
+        ok &= check(patient_id not in args_blob, "审计 args_redacted 不含原始住院号（PHI 脱敏生效）")
+
+        print("[24] 智能体回放越权：他人 run → 404（不暴露存在性）")
+        other_run = c.get(f"/api/v1/agent/runs/{run_uid}", headers={"Authorization": f"Bearer {other_token}"})
+        ok &= check(other_run.status_code == 404, f"他人回放 → {other_run.status_code}")
+
     print("\n" + ("全部通过 ✅" if ok else "存在失败项 ❌"))
     return 0 if ok else 1
 

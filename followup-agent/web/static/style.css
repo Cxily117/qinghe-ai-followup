@@ -327,6 +327,7 @@ sup.cite:hover { background: #d3ebe6; }
   margin: 0 auto;
   padding: 10px 20px 0;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: flex-end;
 }
@@ -347,6 +348,69 @@ sup.cite:hover { background: #d3ebe6; }
 .composer textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
 .composer-side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .counter { font-size: 11px; color: var(--muted-2); }
+/* ---------------- 智能体模式切换 ---------------- */
+.mode-bar {
+  /* 独占一行：textarea 和发送按钮保持原布局，模式切换条放在输入框上方 */
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--panel);
+}
+.seg-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 5px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.seg-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-weight: 500;
+}
+.mode-hint { font-size: 11px; color: var(--muted-2); }
+
+/* ---------------- 工具步骤时间线 ---------------- */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: #fbfcfd;
+}
+.step {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.step .dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted-2);
+  transform: translateY(-2px);
+}
+.step.ok .dot { background: var(--accent); }
+.step.error .dot { background: var(--danger); }
+.step.blocked .dot { background: #b45309; }
+.step .name { color: var(--text); }
+.step .meta { color: var(--muted-2); font-size: 11px; }
+
 .disclaimer {
   max-width: 780px;
   margin: 6px auto 14px;
@@ -354,3 +418,4 @@ sup.cite:hover { background: #d3ebe6; }
   font-size: 11px;
   color: var(--muted-2);
 }
+
