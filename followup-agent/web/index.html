@@ -4,36 +4,71 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>随访智能体 · 医护问答</title>
-<link rel="stylesheet" href="/static/style.css?v=p2">
+<link rel="stylesheet" href="/static/style.css?v=p3">
 </head>
 <body>
 
-<!-- 登录 / 注册：单页应用，未登录时盖在最上层 -->
+<!-- 登录 / 注册：单页应用，未登录时盖在最上层（左侧品牌区 + 右侧表单区） -->
 <div class="overlay" id="login">
-  <form class="login-card" id="login-form" autocomplete="on">
-    <div class="brand">
-      <span class="brand-mark"></span>
-      <div>
-        <h1>清禾医院 · 随访智能体</h1>
-        <p>仅限院内医护人员使用，问答依据已发布的随访制度</p>
+  <div class="auth">
+
+    <!-- 左：品牌与卖点 -->
+    <aside class="auth-hero">
+      <div class="auth-hero-inner">
+        <div class="auth-logo"><span class="brand-mark large"></span>清禾医院</div>
+        <h1>随访智能体</h1>
+        <p class="auth-slogan">把随访制度变成随手可查的答案</p>
+
+        <ul class="auth-points">
+          <li>
+            <span class="pt-ico">▣</span>
+            <div><b>制度即答案</b><i>回答只依据已发布的随访制度，逐条标注出处，超范围直接说明</i></div>
+          </li>
+          <li>
+            <span class="pt-ico">⇄</span>
+            <div><b>自主随访助手</b><i>查患者、核合规、生成随访草稿——写入前必须经医护确认</i></div>
+          </li>
+          <li>
+            <span class="pt-ico">☰</span>
+            <div><b>全程可追溯</b><i>每轮问答与工具调用均留痕审计，患者标识全程脱敏</i></div>
+          </li>
+        </ul>
+
+        <p class="auth-foot">仅限院内医护人员使用 · 请勿泄露患者隐私信息</p>
       </div>
-    </div>
+    </aside>
 
-    <label class="field">
-      <span>用户名</span>
-      <input id="username" name="username" type="text" required autocomplete="username" placeholder="如 nurse01">
-    </label>
-    <label class="field">
-      <span>密码</span>
-      <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="请输入密码">
-    </label>
+    <!-- 右：登录表单 -->
+    <main class="auth-panel">
+      <form class="login-card" id="login-form" autocomplete="on">
+        <div class="auth-head">
+          <span class="brand-mark"></span>
+          <div>
+            <h2>医护登录</h2>
+            <p>使用院内账号进入随访问答工作台</p>
+          </div>
+        </div>
 
-    <p class="form-error" id="login-error" hidden></p>
+        <label class="field">
+          <span>用户名</span>
+          <input id="username" name="username" type="text" required autocomplete="username" placeholder="如 nurse01">
+        </label>
+        <label class="field">
+          <span>密码</span>
+          <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="请输入密码">
+        </label>
 
-    <button class="btn primary" id="login-submit" type="submit">登录</button>
-    <button class="btn link" id="toggle-register" type="button">没有账号？注册一个医护账号</button>
-    <p class="login-tip">注册后默认为「医护」角色，仅能问答与生成任务草稿；制度维护需管理员。</p>
-  </form>
+        <p class="form-error" id="login-error" hidden></p>
+
+        <button class="btn primary block auth-submit" id="login-submit" type="submit">登 录</button>
+        <div class="auth-divider"><span>或</span></div>
+        <button class="btn outline block" id="toggle-register" type="button">没有账号？注册一个医护账号</button>
+        <p class="login-tip">注册后默认为「医护」角色，仅能问答与生成任务草稿；制度维护需管理员授权。</p>
+      </form>
+      <p class="auth-copy">清禾医院 · 随访智能体 v1.0</p>
+    </main>
+
+  </div>
 </div>
 
 <!-- 主界面 -->
@@ -90,6 +125,6 @@
   </div>
 </div>
 
-<script src="/static/app.js?v=p2"></script>
+<script src="/static/app.js?v=p3"></script>
 </body>
 </html>

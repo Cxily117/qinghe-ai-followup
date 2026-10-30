@@ -56,15 +56,108 @@ button { font-family: inherit; font-size: 14px; cursor: pointer; }
 .btn.link:hover { text-decoration: underline; }
 .btn.block { display: block; width: 100%; }
 
-/* ---------------- 登录 ---------------- */
+/* ---------------- 登录：左侧品牌区 + 右侧表单区 ---------------- */
 .overlay {
   position: absolute;
   inset: 0;
+  background: var(--bg);
+  z-index: 10;
+  overflow: auto;
+}
+
+.auth {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(380px, 5fr) 6fr;
+}
+
+/* ---- 左：品牌区（深青渐变，装饰圆 + 卖点清单） ---- */
+.auth-hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 48px 56px;
+  background:
+    radial-gradient(720px 420px at -10% -10%, rgba(255, 255, 255, .14), transparent 60%),
+    radial-gradient(560px 380px at 110% 115%, rgba(45, 212, 191, .22), transparent 55%),
+    linear-gradient(160deg, #0f5e57 0%, #0f766e 55%, #14847a 100%);
+  color: #fff;
+  overflow: hidden;
+}
+.auth-hero-inner { position: relative; max-width: 460px; }
+
+.auth-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  letter-spacing: 2px;
+  font-weight: 600;
+  opacity: .95;
+}
+.brand-mark.large {
+  width: 14px; height: 14px;
+  margin: 0;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 0 0 5px rgba(255, 255, 255, .18);
+}
+
+.auth-hero h1 {
+  margin: 26px 0 8px;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.auth-slogan {
+  margin: 0 0 34px;
+  font-size: 15px;
+  color: rgba(255, 255, 255, .82);
+}
+
+.auth-points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 18px;
+}
+.auth-points li {
+  display: flex;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .12);
+  backdrop-filter: blur(2px);
+}
+.pt-ico {
+  flex: none;
+  width: 34px; height: 34px;
   display: grid;
   place-items: center;
-  background: var(--bg);
-  padding: 24px;
-  z-index: 10;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .16);
+  font-size: 15px;
+  color: #ccfbf1;
+}
+.auth-points b { display: block; font-size: 14px; font-weight: 600; }
+.auth-points i { display: block; font-style: normal; font-size: 12.5px; line-height: 1.6; color: rgba(255, 255, 255, .72); }
+
+.auth-foot {
+  margin: 34px 0 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, .55);
+  letter-spacing: .5px;
+}
+
+/* ---- 右：表单区 ---- */
+.auth-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
 }
 
 .login-card {
@@ -73,8 +166,82 @@ button { font-family: inherit; font-size: 14px; cursor: pointer; }
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 16px;
-  padding: 28px;
-  box-shadow: var(--shadow);
+  padding: 32px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 16px 40px rgba(15, 118, 110, .08);
+}
+
+.auth-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 26px; }
+.auth-head .brand-mark { margin-top: 7px; }
+.auth-head h2 { margin: 0 0 3px; font-size: 19px; font-weight: 600; }
+.auth-head p { margin: 0; font-size: 12.5px; color: var(--muted); }
+
+.field { display: block; margin-bottom: 16px; }
+.field span { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
+.field input {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  background: #fff;
+  color: var(--text);
+  transition: border-color .15s, box-shadow .15s;
+}
+.field input::placeholder { color: var(--muted-2); }
+.field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.form-error {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid #fbd5d0;
+  border-radius: 8px;
+}
+
+.auth-submit { padding: 11px 14px; font-size: 15px; letter-spacing: 6px; text-indent: 6px; }
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+  color: var(--muted-2);
+  font-size: 12px;
+}
+.auth-divider::before, .auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line-soft);
+}
+
+.btn.outline {
+  background: #fff;
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 500;
+}
+.btn.outline:hover { background: var(--accent-soft); }
+
+.login-tip { margin: 18px 0 0; font-size: 12px; color: var(--muted-2); line-height: 1.6; }
+.auth-copy { margin: 22px 0 0; font-size: 11.5px; color: var(--muted-2); }
+
+/* 窄屏：品牌区收起为紧凑横幅，表单占满 */
+@media (max-width: 860px) {
+  .auth { grid-template-columns: 1fr; }
+  .auth-hero { padding: 32px 24px; }
+  .auth-hero h1 { font-size: 24px; margin-top: 16px; }
+  .auth-points { gap: 10px; }
+  .auth-points li { padding: 10px 12px; }
+  .auth-foot { margin-top: 20px; }
+  .auth-panel { padding: 28px 16px; }
 }
 
 .brand { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 22px; }
@@ -88,32 +255,6 @@ button { font-family: inherit; font-size: 14px; cursor: pointer; }
 .brand.small { margin: 0; align-items: center; gap: 10px; }
 .brand.small strong { font-weight: 500; font-size: 14px; }
 .brand.small .brand-mark { margin-top: 0; }
-
-.field { display: block; margin-bottom: 14px; }
-.field span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-.field input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  font-size: 14px;
-  font-family: inherit;
-  background: #fff;
-  color: var(--text);
-}
-.field input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
-
-.form-error {
-  margin: 0 0 12px;
-  padding: 8px 10px;
-  font-size: 13px;
-  color: var(--danger);
-  background: var(--danger-soft);
-  border: 1px solid #fbd5d0;
-  border-radius: 8px;
-}
-
-.login-tip { margin: 14px 0 0; font-size: 12px; color: var(--muted-2); line-height: 1.5; }
 
 /* ---------------- 顶栏 ---------------- */
 .app { display: flex; flex-direction: column; height: 100vh; }
