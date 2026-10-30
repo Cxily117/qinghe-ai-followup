@@ -1,10 +1,11 @@
-# followup-agent · 阶段 2（D1–D4）
+# followup-agent · 阶段 2（D1–D5）
 
-FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT + RAG。
+FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT + RAG + function calling。
 
 - **D1–D2**：认证（JWT/PBKDF2）+ RBAC + 6 张表 + 双方言迁移 ✅
 - **D3–D4**：知识库入库（切片→向量化→发布）+ `/chat` 流式 RAG（混合检索 + 护栏 + 溯源落库）✅
-- **D5–D6**：任务草稿生成（function calling）、质控报表 ⬜
+- **D5**：对话生成随访任务草稿（function calling，**AI 只到 draft，confirmed 必须人工点**）✅
+- **D6**：质控报表 ⬜
 
 ## 快速启动（开发态，SQLite 零依赖）
 
@@ -62,8 +63,11 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | POST | `/api/v1/chat/sessions` | 新建会话 | 登录 |
 | GET | `/api/v1/chat/sessions` | 我的会话列表 | 登录 |
 | GET | `/api/v1/chat/sessions/{id}/messages` | 会话消息（含溯源 meta） | 登录（仅本人） |
-| GET | `/api/v1/tasks/drafts` | 我的任务草稿 | 登录 |
-| POST | `/api/v1/tasks` | 生成任务草稿（D5） | 登录 · 501 |
+| GET | `/api/v1/tasks/drafts` | 我的任务草稿（`?status_filter=draft`） | 登录 |
+| POST | `/api/v1/tasks` | **生成任务草稿**（function calling，只出 draft） | 登录 |
+| GET | `/api/v1/tasks/{id}` | 草稿详情（含 `content.ai` 溯源） | 归属人/管理员 |
+| POST | `/api/v1/tasks/{id}/confirm` | **人工确认**（AI 无法调用） | 归属人/管理员 |
+| POST | `/api/v1/tasks/{id}/cancel` | 取消草稿（已确认不可取消 → 409） | 归属人/管理员 |
 | GET | `/api/v1/reports/summary` | 质控汇总（D6） | 管理员 |
 
 ### SSE 事件序列
@@ -106,6 +110,43 @@ event: end
 已知取舍：模型"答一半 + 拒一半"时引用也会被清空。这是**故意偏保守**——
 "拒答却带着资料编号"看起来像编造出处，比"少显示两条来源"严重得多。
 
+## D5 的关键设计（任务草稿）
+
+| 设计 | 为什么 |
+|---|---|
+| **工具 schema 里没有 `status` 字段** | 「AI 只能写草稿」最硬的实现不是提示词，而是让模型**没有语法**表达"已确认"；服务端 `status="draft"` 是写死的字面量 |
+| **入参只收 `offset_days`，不收日期** | 日期计算是模型最不可靠的能力；"出院后第 7 天"由服务端 `base_date + timedelta` 算，并统一归一到 **09:00** |
+| **抽不到患者标识就 422，不编造** | 编一个住院号写进库里，比生成失败严重得多；允许调用方传 `patient_ref` 兜底，并在 flags 里标记 `patient_ref_from_hint` |
+| **节点清洗在代码里**：0–365 钳制、按天去重合并、最多 10 条、渠道白名单 | 模型会"好心"补出对话里没有的节点、会输出 `第7天` 这种字符串 |
+| **确认时可改方案/时间/节点** | "确认"的语义是"具名的人看过后按自己的判断定稿"，不是"同意 AI"；`content.confirm` 记确认人与时间 |
+| **24h 内同患者同节点去重** | 防止前端连点刷出一串重复草稿卡片（返回 `reused: true`） |
+| **`chat_tools` 走网关 + JSON 降级** | 院内换成本地小模型（vLLM/Qwen 7B）时 tools 支持不稳；上游 400/404/422 时自动降级为"只输出 JSON"，整条链路不中断 |
+| **原始 `raw_args` 落库** | 归一化会改模型输出，出问题时必须能对账（`content.ai.raw_args`） |
+
+### 草稿状态机
+
+```
+POST /tasks            → draft ──confirm（人工）──→ confirmed（终态）
+                            └────cancel（人工）───→ cancelled（终态）
+```
+
+`confirmed` 不可再确认（409）、不可取消（409）；非归属人操作一律 404（不暴露"存在但你没权限"）。
+
+### 草稿落库结构
+
+```json
+{
+  "items": [{"name": "出院后第 3 天随访", "offset_days": 3, "channel": "phone",
+             "notes": "", "due_date": "2026-10-23"}],
+  "rationale": "依据对话中的「第 3/7/30 天电话随访」",
+  "ai": {"model": "glm-4-flash", "prompt_version": "v1", "latency_ms": 1830,
+         "degraded": null, "tool": "create_followup_task_draft",
+         "raw_args": {"...": "模型原始入参"}, "flags": {}, "trigger": "manual"},
+  "confirm": {"by": "nurse01", "by_id": 2, "at": "2026-10-30T11:02:33+08:00",
+              "note": "已核对出院日", "ai_item_count": 3}
+}
+```
+
 ## 冒烟测试（可挂 CI）
 
 ```bash
@@ -114,7 +155,9 @@ python scripts/smoke_test.py --base-url http://127.0.0.1:8000
 ```
 
 覆盖：健康检查 → 注册登录 → 上传(draft) → **发布前提问不命中该文档** → 发布 →
-**发布后命中并引用** → SSE 事件完整性 → `messages.meta` 溯源字段。
+**发布后命中并引用** → SSE 事件完整性 → `messages.meta` 溯源字段 →
+**生成任务草稿（客户端硬塞 `status=confirmed` 也必须落 draft）** → 缺患者标识 422 →
+越权确认 404 → 人工确认 confirmed → 重复确认/取消已确认 409。
 退出码 0 = 全绿。每次运行会埋一个唯一编号提问，避免被库里历史文档干扰。
 
 ## 数据模型（6 张表）
@@ -133,11 +176,12 @@ followup-agent/
 │   ├── models/               # 6 张表 ORM
 │   ├── schemas/              # Pydantic DTO
 │   ├── agents/               # ★ 智能体层
-│   │   ├── gateway/          #   base(抽象) · openai_provider · mock_provider · embedding
-│   │   ├── prompts/          #   policy_qa.md（带版本号，可评审可 diff）
+│   │   ├── gateway/          #   base(抽象，含 chat_tools 契约) · openai_provider · mock_provider · embedding
+│   │   ├── prompts/          #   policy_qa.md · task_extract.md（带版本号，可评审可 diff）
+│   │   ├── tools.py          #   function calling 工具 schema（无 status 字段）
 │   │   ├── rag.py            #   混合检索 + 提示词拼装
 │   │   └── guardrails.py     #   输出护栏
-│   └── services/             # knowledge_service · chat_service · qa_service（编排）
+│   └── services/             # knowledge_service · chat_service · qa_service · task_service（编排）
 ├── alembic/                  # env.py（URL 从 Settings 注入）+ versions/0001
 ├── scripts/smoke_test.py     # 端到端冒烟
 ├── docker-compose.yml        # pgvector/pgvector:pg16（5433）
@@ -151,7 +195,7 @@ followup-agent/
 - 单次检索最多扫描 `RAG_MAX_CANDIDATES=5000` 个切片。超过这个量级应改 pgvector HNSW 召回 topN + BM25 重排，
   替换 `app/agents/rag.py::_score_all` 一个函数即可。
 
-## 下一步（D5–D6）
+## 下一步（D6）
 
-- **D5**：对话内 function calling 生成随访任务草稿（`followup_task_drafts` 只到 draft，confirmed 必须人工点）
-- **D6**：质控报表（完成率、红旗升级率、无引用回答占比——`flags` 字段已就位）
+- **D6**：质控报表（完成率、红旗升级率、无引用回答占比、**AI 草稿人工修改率**
+  ——基础字段已就位：`messages.meta.flags`、`followup_task_drafts.content.confirm`）

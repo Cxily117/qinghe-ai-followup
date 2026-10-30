@@ -8,6 +8,11 @@
 统一契约：
   chat(messages)  -> ChatResult(text, model, usage, latency_ms)
   stream(messages) -> AsyncIterator[str]，逐段吐出增量文本（不含协议包装）
+  chat_tools(messages, tools) -> ChatResult(extra["tool_calls"] = [ToolCall, ...])
+
+为什么把工具调用也收进网关（而不是在 D5 里直接写 httpx）：
+  换供应商时「生成任务草稿」这条链路同样不该重写；而且 mock 也要能返回工具调用，
+  否则离线环境下 D5 的整条落库链路就没法验证。
 """
 from __future__ import annotations
 
@@ -32,6 +37,21 @@ class ChatResult:
     extra: dict = field(default_factory=dict)
 
 
+@dataclass
+class ToolCall:
+    """一次工具调用请求（已解析成 dict 参数）。"""
+
+    name: str
+    arguments: dict
+    # 原始 arguments 字符串保留下来：模型给出非法 JSON 时，这是唯一的排障线索
+    raw_arguments: str = ""
+    call_id: str = ""
+
+
+class ToolCallParseError(ValueError):
+    """模型返回的工具参数不是合法 JSON / 不是 object。"""
+
+
 class LLMProvider(ABC):
     """所有供应商实现的基类。"""
 
@@ -46,6 +66,20 @@ class LLMProvider(ABC):
         self, messages: list[dict], temperature: float | None = None
     ) -> AsyncIterator[str]:
         """流式返回增量文本。注意：这是普通函数，返回 async generator。"""
+
+    async def chat_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        tool_choice: str | dict = "auto",
+        temperature: float | None = None,
+    ) -> ChatResult:
+        """带工具的一次性调用，结果放在 `ChatResult.extra["tool_calls"]`。
+
+        不设为抽象方法：只做问答的子类（未来的纯嵌入/纯摘要 Provider）不必实现它，
+        调用方拿到 NotImplementedError 即可明确降级。
+        """
+        raise NotImplementedError(f"{type(self).__name__} 未实现 chat_tools")
 
 
 def get_llm() -> LLMProvider:

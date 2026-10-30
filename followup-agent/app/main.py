@@ -25,9 +25,10 @@ def create_app() -> FastAPI:
     s = get_settings()
     app = FastAPI(
         title=s.app_name,
-        version="0.3.0",
+        version="0.5.0",
         description=(
-            "医院随访智能体系统 · 阶段2（D1–D2 认证与数据模型；D3–D4 知识库入库 + RAG 流式问答）"
+            "医院随访智能体系统 · 阶段2"
+            "（D1–D2 认证与数据模型；D3–D4 知识库入库 + RAG 流式问答；D5 任务草稿 function calling）"
         ),
         lifespan=lifespan,
     )

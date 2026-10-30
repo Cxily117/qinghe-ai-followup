@@ -160,6 +160,82 @@ def main() -> int:
         ok &= check(bool(meta.get("prompt_version")), f"prompt_version={meta.get('prompt_version')}")
         ok &= check("citations" in meta, f"citations={meta.get('citations')}")
 
+        # ---------------- D5：任务草稿（AI 只能到 draft） ----------------
+        patient = f"ZY{suffix.upper()}"
+        plan_text = f"患者编号 {patient}，出院后第 3 天、第 7 天、第 30 天各做一次电话随访"
+
+        print("[9] 生成任务草稿（function calling → 只落 draft）")
+        # 故意带上 status=confirmed：客户端想绕过人工关卡，必须被无视
+        gen = c.post(
+            "/api/v1/tasks",
+            headers={"Authorization": f"Bearer {staff}"},
+            json={"question": plan_text, "base_date": "2026-10-20", "status": "confirmed"},
+        )
+        draft = gen.json()
+        ok &= check(gen.status_code == 201, f"HTTP {gen.status_code}")
+        ok &= check(draft.get("status") == "draft", f"status={draft.get('status')}（客户端传 confirmed 也必须无效）")
+        ok &= check(draft.get("patient_ref") == patient, f"patient_ref={draft.get('patient_ref')}")
+        items = (draft.get("content") or {}).get("items") or []
+        ok &= check([i["offset_days"] for i in items] == [3, 7, 30], f"节点={[i['offset_days'] for i in items]}")
+        ok &= check(items and items[0].get("due_date") == "2026-10-23", f"首个节点日期={items[0].get('due_date') if items else None}")
+        ok &= check(
+            str(draft.get("scheduled_at") or "").startswith("2026-10-23T09:00"),
+            f"scheduled_at={draft.get('scheduled_at')}（应归一到 09:00）",
+        )
+        ai_meta = (draft.get("content") or {}).get("ai") or {}
+        ok &= check(bool(ai_meta.get("prompt_version")) and bool(ai_meta.get("model")), f"ai meta={ {k: ai_meta.get(k) for k in ('model', 'prompt_version', 'latency_ms')} }")
+
+        print("[10] 缺患者标识 → 422（不编造住院号）")
+        bad = c.post(
+            "/api/v1/tasks",
+            headers={"Authorization": f"Bearer {staff}"},
+            json={"question": "出院后第 7 天打电话随访一次"},
+        )
+        ok &= check(bad.status_code == 422, f"HTTP {bad.status_code} detail={bad.json().get('detail', '')[:60]}")
+
+        print("[11] 非归属人不得确认 → 404")
+        other = f"smoke_other_{suffix}"
+        c.post(
+            "/api/v1/auth/register",
+            json={"username": other, "password": "Passw0rd!", "full_name": other, "role": "staff"},
+        )
+        other_token = c.post(
+            "/api/v1/auth/login", json={"username": other, "password": "Passw0rd!"}
+        ).json()["access_token"]
+        intrude = c.post(
+            f"/api/v1/tasks/{draft['id']}/confirm",
+            headers={"Authorization": f"Bearer {other_token}"},
+            json={"note": "越权确认"},
+        )
+        ok &= check(intrude.status_code == 404, f"HTTP {intrude.status_code}")
+
+        print("[12] 人工确认 → confirmed（并记 confirmed_by / 确认人姓名）")
+        conf = c.post(
+            f"/api/v1/tasks/{draft['id']}/confirm",
+            headers={"Authorization": f"Bearer {staff}"},
+            json={"note": "护士已核对出院日与随访节点"},
+        )
+        confirmed = conf.json()
+        ok &= check(conf.status_code == 200 and confirmed.get("status") == "confirmed", f"status={confirmed.get('status')}")
+        ok &= check(bool(confirmed.get("confirmed_by")), f"confirmed_by={confirmed.get('confirmed_by')}")
+        ok &= check(
+            ((confirmed.get("content") or {}).get("confirm") or {}).get("by") == f"smoke_nurse_{suffix}",
+            "确认人姓名已落库（可追溯）",
+        )
+
+        print("[13] 重复确认 / 已确认不可取消 → 409")
+        again = c.post(
+            f"/api/v1/tasks/{draft['id']}/confirm",
+            headers={"Authorization": f"Bearer {staff}"},
+            json={},
+        )
+        ok &= check(again.status_code == 409, f"重复确认 HTTP {again.status_code}")
+        cancel = c.post(
+            f"/api/v1/tasks/{draft['id']}/cancel",
+            headers={"Authorization": f"Bearer {staff}"},
+        )
+        ok &= check(cancel.status_code == 409, f"取消已确认任务 HTTP {cancel.status_code}")
+
     print("\n" + ("全部通过 ✅" if ok else "存在失败项 ❌"))
     return 0 if ok else 1
 
