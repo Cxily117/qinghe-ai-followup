@@ -1,0 +1,11 @@
+# WorkBuddy 项目内部数据（不入库）
+.workbuddy/
+# 中间产物 / 流水线输出
+output/
+# 临时工具与压缩包
+_tools/
+*.zip
+# OS / 编辑器
+Thumbs.db
+.DS_Store
+desktop.ini

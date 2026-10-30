@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>门诊后随访 · AI 数智化（目标态）流程图</title>
+<style>
+  body{margin:0;background:#fff;font-family:"Microsoft YaHei","PingFang SC",sans-serif;color:#1F2329}
+  .wrap{max-width:960px;margin:0 auto;padding:24px}
+  h2{font-size:18px;margin:0 0 4px}
+  .sub{color:#5A6573;font-size:13px;margin-bottom:10px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#5A6573;margin:8px 0 4px}
+  .dot{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:middle}
+  svg{display:block;margin:0 auto;max-width:100%}
+</style></head>
+<body><div class="wrap">
+<h2>门诊后随访 · AI 数智化目标态流程图</h2>
+<div class="sub">对比现状：名单导出/手工分组/逐个拨号/重复填写/群聊双录 五处耗时环节由 AI 接管；人工仅保留授权补录、红旗升级、专科处置、覆盖前确认、90 天归档五道硬关卡。</div>
+<div class="legend">
+  <span><span class="dot" style="background:#1FA971"></span>AI 自动（数智化接管）</span>
+  <span><span class="dot" style="background:#2F6BFF"></span>人工硬关卡（不可自动化）</span>
+  <span><span class="dot" style="background:#E08A2B"></span>判断框</span>
+  <span><span class="dot" style="background:#D64545"></span>断点（流程终止）</span>
+</div>
+<svg viewBox="0 0 900 1030" xmlns="http://www.w3.org/2000/svg" font-family="'Microsoft YaHei','PingFang SC',sans-serif">
+  <defs>
+    <marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#5A6573"/>
+    </marker>
+  </defs>
+
+  <!-- connectors -->
+  <g stroke="#5A6573" stroke-width="1.6" fill="none" marker-end="url(#ar)">
+    <line x1="450" y1="64" x2="450" y2="84"/>
+    <line x1="450" y1="136" x2="450" y2="156"/>
+    <line x1="450" y1="208" x2="450" y2="214"/>
+    <line x1="550" y1="260" x2="618" y2="260"/>
+    <line x1="450" y1="306" x2="450" y2="326"/>
+    <line x1="450" y1="388" x2="450" y2="404"/>
+    <line x1="550" y1="420" x2="618" y2="420"/>
+    <line x1="450" y1="466" x2="450" y2="486"/>
+    <line x1="550" y1="580" x2="618" y2="580"/>
+    <line x1="450" y1="626" x2="450" y2="646"/>
+    <line x1="450" y1="698" x2="450" y2="694"/>
+    <line x1="550" y1="740" x2="618" y2="740"/>
+    <line x1="450" y1="786" x2="450" y2="788"/>
+    <line x1="550" y1="834" x2="618" y2="834"/>
+    <line x1="450" y1="834" x2="450" y2="900"/>
+    <line x1="450" y1="952" x2="450" y2="964"/>
+    <!-- r4 return: 人工补录 -> 重新外呼 -->
+    <path d="M740,286 L740,352 L582,352" marker-end="url(#ar)"/>
+    <!-- r8 升级专科 -> 回到生成记录下游(专科处置判断) via n9? keep simple down -->
+    <path d="M740,606 L740,668 L582,668" marker-end="url(#ar)"/>
+  </g>
+
+  <!-- Start -->
+  <rect x="370" y="20" width="160" height="44" rx="22" fill="#EEF3FF" stroke="#2F6BFF"/>
+  <text x="450" y="47" text-anchor="middle" font-size="14" font-weight="600" fill="#1F2329">开始（HIS 出院事件）</text>
+
+  <!-- n2 名单自动同步 -->
+  <rect x="320" y="84" width="260" height="52" rx="8" fill="#E6F7EF" stroke="#1FA971"/>
+  <text x="450" y="104" text-anchor="middle" font-size="13" font-weight="600" fill="#176B47">① HIS 名单自动同步（只读接口）</text>
+  <text x="450" y="123" text-anchor="middle" font-size="11" fill="#1F7A52">替代「导出本地表」· 院内最小必要 · 隐私脱库风险消除</text>
+
+  <!-- n3 AI 排程分组 -->
+  <rect x="320" y="156" width="260" height="52" rx="8" fill="#E6F7EF" stroke="#1FA971"/>
+  <text x="450" y="176" text-anchor="middle" font-size="13" font-weight="600" fill="#176B47">② AI 排程与分组</text>
+  <text x="450" y="195" text-anchor="middle" font-size="11" fill="#1F7A52">替代手工分批 · 生成建议排程，护士确认</text>
+
+  <!-- d4 授权有效 -->
+  <polygon points="450,214 550,260 450,306 350,260" fill="#FFF3E6" stroke="#E08A2B"/>
+  <text x="450" y="256" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2329">联系人 /</text>
+  <text x="450" y="273" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2329">授权有效？</text>
+  <text x="556" y="256" font-size="11" fill="#9A5A12">否</text>
+
+  <!-- r4 人工补录 -->
+  <rect x="620" y="234" width="240" height="52" rx="8" fill="#E8F0FF" stroke="#2F6BFF"/>
+  <text x="740" y="254" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2329">人工补录 / 核对身份</text>
+  <text x="740" y="272" text-anchor="middle" font-size="11" fill="#2F6BFF">缺失转人工修复 · 禁止猜测值</text>
+
+  <!-- n5 AI 外呼触达 -->
+  <rect x="320" y="326" width="260" height="52" rx="8" fill="#E6F7EF" stroke="#1FA971"/>
+  <text x="450" y="346" text-anchor="middle" font-size="13" font-weight="600" fill="#176B47">③ AI 外呼 + 多渠道触达</text>
+  <text x="450" y="365" text-anchor="middle" font-size="11" fill="#1F7A52">替代逐个拨号 · 自动重试 ×3 / 转短信</text>
+
+  <!-- d6 接通完成 -->
+  <polygon points="450,374 550,420 450,466 350,420" fill="#FFF3E6" stroke="#E08A2B"/>
+  <text x="450" y="416" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2329">接通并完成问卷？</text>
+  <text x="556" y="416" font-size="11" fill="#9A5A12">否</text>
+
+  <!-- r6 未触达断点 -->
+  <rect x="620" y="388" width="240" height="64" rx="8" fill="#FDECEC" stroke="#D64545"/>
+  <text x="740" y="410" text-anchor="middle" font-size="12.5" font-weight="600" fill="#B42318">三次未接 · 标记未触达</text>
+  <text x="740" y="428" text-anchor="middle" font-size="11" fill="#B42318">沉默失败 · 断点（流程终止）</text>
+
+  <!-- n7 AI 语音问卷 -->
+  <rect x="320" y="486" width="260" height="52" rx="8" fill="#E6F7EF" stroke="#1FA971"/>
+  <text x="450" y="506" text-anchor="middle" font-size="13" font-weight="600" fill="#176B47">④ AI 语音问卷（实时转写）</text>
+  <text x="450" y="525" text-anchor="middle" font-size="11" fill="#1F7A52">整理患者陈述 · 禁诊断/调药/代签</text>
+
+  <!-- d8 红旗 -->
+  <polygon points="450,534 550,580 450,626 350,580" fill="#FFF3E6" stroke="#E08A2B"/>
+  <text x="450" y="576" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2329">出现红旗症状？</text>
+  <text x="556" y="576" font-size="11" fill="#9A5A12">是</text>
+
+  <!-- r8 升级专科 -->
+  <rect x="620" y="554" width="240" height="52" rx="8" fill="#E8F0FF" stroke="#2F6BFF"/>
+  <text x="740" y="574" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2329">立即升级专科（人工）</text>
+  <text x="740" y="592" text-anchor="middle" font-size="11" fill="#2F6BFF">停问卷 · 转具名接手人 · 不可逆</text>
+
+  <!-- n9 AI 生成记录 -->
+  <rect x="320" y="646" width="260" height="52" rx="8" fill="#E6F7EF" stroke="#1FA971"/>
+  <text x="450" y="666" text-anchor="middle" font-size="13" font-weight="600" fill="#176B47">⑤ AI 生成结构化记录</text>
+  <text x="450" y="685" text-anchor="middle" font-size="11" fill="#1F7A52">显示原记录供比对 · 覆盖前须专科确认</text>
+
+  <!-- d10 专科处置 -->
+  <polygon points="450,694 550,740 450,786 350,740" fill="#FFF3E6" stroke="#E08A2B"/>
+  <text x="450" y="736" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2329">需专科处置？</text>
+  <text x="556" y="736" font-size="11" fill="#9A5A12">是</text>
+
+  <!-- r10 专科确认 -->
+  <rect x="620" y="714" width="240" height="52" rx="8" fill="#E8F0FF" stroke="#2F6BFF"/>
+  <text x="740" y="734" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2329">专科确认与处置</text>
+  <text x="740" y="752" text-anchor="middle" font-size="11" fill="#2F6BFF">处理人/时限/退回原因留痕</text>
+
+  <!-- d11 反馈关联 -->
+  <polygon points="450,788 550,834 450,880 350,834" fill="#FFF3E6" stroke="#E08A2B"/>
+  <text x="450" y="830" text-anchor="middle" font-size="12.5" font-weight="600" fill="#1F2329">反馈关联完整？</text>
+  <text x="556" y="830" font-size="11" fill="#9A5A12">否</text>
+
+  <!-- r11 系统补录 -->
+  <rect x="620" y="808" width="240" height="52" rx="8" fill="#E6F7EF" stroke="#1FA971"/>
+  <text x="740" y="828" text-anchor="middle" font-size="12.5" font-weight="600" fill="#176B47">系统补录（关联合规）</text>
+  <text x="740" y="846" text-anchor="middle" font-size="11" fill="#1F7A52">禁止群聊/个人表补录</text>
+
+  <!-- n12 AI 归档 -->
+  <rect x="320" y="900" width="260" height="52" rx="8" fill="#E6F7EF" stroke="#1FA971"/>
+  <text x="450" y="920" text-anchor="middle" font-size="13" font-weight="600" fill="#176B47">⑥ AI 自动归档 + 90 天留存</text>
+  <text x="450" y="939" text-anchor="middle" font-size="11" fill="#1F7A52">到期删除/归档 · 隐私与质控确认</text>
+
+  <!-- End -->
+  <rect x="370" y="964" width="160" height="44" rx="22" fill="#EEF3FF" stroke="#2F6BFF"/>
+  <text x="450" y="991" text-anchor="middle" font-size="14" font-weight="600" fill="#1F2329">结束（质控归档）</text>
+</svg>
+</div></body></html>

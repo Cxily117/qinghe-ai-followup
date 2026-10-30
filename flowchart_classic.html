@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  body{margin:0;background:#FFFFFF;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;}
+  .page{padding:24px;}
+  h1{font-size:18px;font-weight:600;color:#1F2329;margin:0 0 2px;}
+  .sub{font-size:12px;color:#6B7280;margin:0 0 10px;}
+</style>
+</head>
+<body>
+<div class="page">
+<h1>清禾综合医院 · 门诊后随访现状流程图（判断框 / 流程框）</h1>
+<p class="sub">蓝=人工审核　红=隐私落点　橙=断点　琥珀=判断框　依据编号见各节点</p>
+<svg width="920" height="1400" viewBox="0 0 920 1400" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,PingFang SC,Microsoft YaHei,sans-serif">
+<defs>
+<marker id="ar" markerWidth="11" markerHeight="11" refX="8" refY="3.5" orient="auto">
+  <path d="M0,0 L9,3.5 L0,7 Z" fill="#5F5E5A"/>
+</marker>
+</defs>
+
+<!-- connectors (draw before nodes) -->
+<g fill="none" stroke="#5F5E5A" stroke-width="1.6" marker-end="url(#ar)">
+<line x1="410" y1="62" x2="410" y2="92"/>
+<line x1="410" y1="148" x2="410" y2="172"/>
+<line x1="410" y1="228" x2="410" y2="238"/>
+<line x1="410" y1="342" x2="410" y2="372"/>
+<polyline points="515,290 620,290"/>
+<polyline points="740,316 740,372 410,372"/>
+<line x1="410" y1="428" x2="410" y2="438"/>
+<line x1="410" y1="542" x2="410" y2="572"/>
+<polyline points="515,490 620,490"/>
+<line x1="410" y1="628" x2="410" y2="638"/>
+<line x1="410" y1="742" x2="410" y2="772"/>
+<polyline points="515,690 620,690"/>
+<polyline points="740,716 740,772 410,772"/>
+<line x1="410" y1="828" x2="410" y2="838"/>
+<line x1="410" y1="942" x2="410" y2="972"/>
+<polyline points="515,890 620,890"/>
+<polyline points="740,916 740,972 410,972"/>
+<line x1="410" y1="1028" x2="410" y2="1038"/>
+<line x1="410" y1="1142" x2="410" y2="1172"/>
+<polyline points="515,1090 620,1090"/>
+<polyline points="740,1116 740,1172 410,1172"/>
+<line x1="410" y1="1228" x2="410" y2="1258"/>
+</g>
+
+<!-- branch labels -->
+<g fill="#5F5E5A" font-size="12">
+<text x="566" y="285" text-anchor="middle">否</text>
+<text x="566" y="485" text-anchor="middle">否</text>
+<text x="566" y="685" text-anchor="middle">是</text>
+<text x="566" y="885" text-anchor="middle">是</text>
+<text x="566" y="1085" text-anchor="middle">否</text>
+<text x="404" y="360" text-anchor="end" font-size="11">是</text>
+<text x="404" y="560" text-anchor="end" font-size="11">是</text>
+<text x="404" y="760" text-anchor="end" font-size="11">否</text>
+<text x="404" y="960" text-anchor="end" font-size="11">否</text>
+<text x="404" y="1160" text-anchor="end" font-size="11">是</text>
+</g>
+
+<!-- START -->
+<rect x="310" y="18" width="200" height="44" rx="22" fill="#2C2C2A"/>
+<text x="410" y="45" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="600">开始（出院）</text>
+
+<!-- P1 -->
+<rect x="280" y="92" width="260" height="56" rx="8" fill="#FBEDED" stroke="#C0392B"/>
+<text x="410" y="113" text-anchor="middle" fill="#1F2329" font-size="13" font-weight="600">HIS 生成出院名单</text>
+<text x="410" y="131" text-anchor="middle" fill="#555B66" font-size="11.5">月约 1200 人 · 隐私导出 [f00][f01]</text>
+
+<!-- P2 -->
+<rect x="280" y="172" width="260" height="56" rx="8" fill="#FFFFFF" stroke="#C7CDD4"/>
+<text x="410" y="193" text-anchor="middle" fill="#1F2329" font-size="13" font-weight="600">名单导出 + 手工分组排程</text>
+<text x="410" y="211" text-anchor="middle" fill="#555B66" font-size="11.5">护士分批 · 耗时费钱 [f01][f30]</text>
+
+<!-- D1 -->
+<polygon points="410,238 515,290 410,342 305,290" fill="#FEF3E2" stroke="#E0A93B"/>
+<text x="410" y="285" text-anchor="middle" fill="#1F2329" font-size="12.5" font-weight="600">联系人 / 授权有效？</text>
+<text x="410" y="302" text-anchor="middle" fill="#8A6A1F" font-size="10.5">[f31][f33]</text>
+
+<!-- P_a -->
+<rect x="620" y="264" width="240" height="52" rx="8" fill="#EAF1FB" stroke="#3E7DD1"/>
+<text x="740" y="284" text-anchor="middle" fill="#1F2329" font-size="12.5" font-weight="600">人工核对 / 补录授权</text>
+<text x="740" y="302" text-anchor="middle" fill="#3E5E8C" font-size="11">专科判定 · 人工审核 [f15]</text>
+
+<!-- P3 -->
+<rect x="280" y="372" width="260" height="56" rx="8" fill="#FFFFFF" stroke="#C7CDD4"/>
+<text x="410" y="393" text-anchor="middle" fill="#1F2329" font-size="13" font-weight="600">逐个拨号触达</text>
+<text x="410" y="411" text-anchor="middle" fill="#555B66" font-size="11.5">号码失效/方言 · 耗时 [f10]</text>
+
+<!-- P_b -->
+<rect x="620" y="464" width="240" height="52" rx="8" fill="#FFF3E6" stroke="#E08A2B"/>
+<text x="740" y="484" text-anchor="middle" fill="#1F2329" font-size="12.5" font-weight="600">三次未接 · 标记未触达</text>
+<text x="740" y="502" text-anchor="middle" fill="#9A5A12" font-size="11">沉默失败 · 断点（流程终止）[f10]</text>
+
+<!-- D2 -->
+<polygon points="410,438 515,490 410,542 305,490" fill="#FEF3E2" stroke="#E0A93B"/>
+<text x="410" y="486" text-anchor="middle" fill="#1F2329" font-size="12.5" font-weight="600">接通并完成问卷？</text>
+<text x="410" y="503" text-anchor="middle" fill="#8A6A1F" font-size="10.5">[f10][f53]</text>
+
+<!-- P4 -->
+<rect x="280" y="572" width="260" height="56" rx="8" fill="#EAF1FB" stroke="#3E7DD1"/>
+<text x="410" y="593" text-anchor="middle" fill="#1F2329" font-size="13" font-weight="600">按术式问卷问诊</text>
+<text x="410" y="611" text-anchor="middle" fill="#3E5E8C" font-size="11.5">AI 辅助整理陈述 · 人工复核 [f21]</text>
+
+<!-- D3 -->
+<polygon points="410,638 515,690 410,742 305,690" fill="#FEF3E2" stroke="#E0A93B"/>
+<text x="410" y="686" text-anchor="middle" fill="#1F2329" font-size="12.5" font-weight="600">出现红旗症状？</text>
+<text x="410" y="703" text-anchor="middle" fill="#8A6A1F" font-size="10.5">[f11]</text>
+
+<!-- P_c -->
+<rect x="620" y="664" width="240" height="52" rx="8" fill="#EAF1FB" stroke="#3E7DD1"/>
+<text x="740" y="684" text-anchor="middle" fill="#1F2329" font-size="12.5" font-weight="600">立即停问卷 · 升级专科</text>
+<text x="740" y="702" text-anchor="middle" fill="#3E5E8C" font-size="11">人工处理 · 隐私 [f42][f44]</text>
+
+<!-- P5 -->
+<rect x="280" y="772" width="260" height="56" rx="8" fill="#FFFFFF" stroke="#C7CDD4"/>
+<text x="410" y="793" text-anchor="middle" fill="#1F2329" font-size="13" font-weight="600">生成随访记录</text>
+<text x="410" y="811" text-anchor="middle" fill="#555B66" font-size="11.5">消除 4 分钟重复填写 [f12]</text>
+
+<!-- D4 -->
+<polygon points="410,838 515,890 410,942 305,890" fill="#FEF3E2" stroke="#E0A93B"/>
+<text x="410" y="886" text-anchor="middle" fill="#1F2329" font-size="12.5" font-weight="600">需专科处置？</text>
+<text x="410" y="903" text-anchor="middle" fill="#8A6A1F" font-size="10.5">[f20]</text>
+
+<!-- P_d -->
+<rect x="620" y="864" width="240" height="52" rx="8" fill="#EAF1FB" stroke="#3E7DD1"/>
+<text x="740" y="884" text-anchor="middle" fill="#1F2329" font-size="12.5" font-weight="600">专科确认与处置</text>
+<text x="740" y="902" text-anchor="middle" fill="#3E5E8C" font-size="11">医生承担决策 · 人工 [f22]</text>
+
+<!-- P6 -->
+<rect x="280" y="972" width="260" height="56" rx="8" fill="#EAF1FB" stroke="#3E7DD1"/>
+<text x="410" y="993" text-anchor="middle" fill="#1F2329" font-size="13" font-weight="600">形成结构化记录</text>
+<text x="410" y="1011" text-anchor="middle" fill="#3E5E8C" font-size="11.5">覆盖前须人工确认 [f15]</text>
+
+<!-- D5 -->
+<polygon points="410,1038 515,1090 410,1142 305,1090" fill="#FEF3E2" stroke="#E0A93B"/>
+<text x="410" y="1086" text-anchor="middle" fill="#1F2329" font-size="12.5" font-weight="600">反馈关联完整？</text>
+<text x="410" y="1103" text-anchor="middle" fill="#8A6A1F" font-size="10.5">[f54]</text>
+
+<!-- P_e -->
+<rect x="620" y="1064" width="240" height="52" rx="8" fill="#FBEDED" stroke="#C0392B"/>
+<text x="740" y="1084" text-anchor="middle" fill="#1F2329" font-size="12.5" font-weight="600">系统补录（关联合规）</text>
+<text x="740" y="1102" text-anchor="middle" fill="#9A3A3A" font-size="11">禁止群聊补录 · 隐私断点 [f14]</text>
+
+<!-- P7 -->
+<rect x="280" y="1172" width="260" height="56" rx="8" fill="#FBEDED" stroke="#C0392B"/>
+<text x="410" y="1193" text-anchor="middle" fill="#1F2329" font-size="13" font-weight="600">留痕归档（90 天）</text>
+<text x="410" y="1211" text-anchor="middle" fill="#9A3A3A" font-size="11.5">质控确认删除 · 隐私 [f43][f45]</text>
+
+<!-- END -->
+<rect x="310" y="1258" width="200" height="44" rx="22" fill="#2C2C2A"/>
+<text x="410" y="1285" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="600">结束（归档）</text>
+
+<!-- legend -->
+<g font-size="11.5" fill="#1F2329">
+<rect x="40" y="1352" width="14" height="14" rx="3" fill="#EAF1FB" stroke="#3E7DD1"/><text x="60" y="1363">人工审核</text>
+<rect x="150" y="1352" width="14" height="14" rx="3" fill="#FBEDED" stroke="#C0392B"/><text x="170" y="1363">隐私落点</text>
+<rect x="260" y="1352" width="14" height="14" rx="3" fill="#FFF3E6" stroke="#E08A2B"/><text x="280" y="1363">断点</text>
+<rect x="345" y="1352" width="14" height="14" fill="#FEF3E2" stroke="#E0A93B" transform="rotate(45 352 1359)"/><text x="365" y="1363">判断框</text>
+<rect x="440" y="1352" width="14" height="14" rx="3" fill="#FFFFFF" stroke="#C7CDD4"/><text x="460" y="1363">流程框</text>
+</g>
+</svg>
+</div>
+</body>
+</html>

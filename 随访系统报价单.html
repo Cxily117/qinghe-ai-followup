@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>清禾综合医院 · 门诊后随访辅助系统（试点）报价单</title>
+<style>
+  :root{
+    --ink:#1F2329; --sub:#5A6573; --line:#E3E8EF; --bg:#F7F9FC;
+    --brand:#2F6BFF; --warn:#E08A2B; --ok:#1FA971; --red:#D64545;
+    --soft:#EEF3FF;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;
+    line-height:1.6;font-size:14px;}
+  .wrap{max-width:920px;margin:0 auto;padding:32px 28px 56px;background:#fff;}
+  h1{font-size:24px;margin:0 0 4px}
+  h2{font-size:18px;margin:34px 0 12px;padding-left:10px;border-left:4px solid var(--brand)}
+  h3{font-size:15px;margin:20px 0 8px;color:var(--sub)}
+  .meta{color:var(--sub);font-size:13px;margin-bottom:6px}
+  .note{background:var(--soft);border:1px solid #D6E2FF;border-radius:8px;
+    padding:12px 14px;font-size:13px;color:#33415C;margin:12px 0}
+  .note b{color:var(--brand)}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:#F2F5FA;font-weight:600;color:#33415C}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr.tot td{background:#FBFCFE;font-weight:700}
+  .tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;margin-right:4px}
+  .t-build{background:#E8F0FF;color:#2F6BFF}
+  .t-run{background:#EAF7F0;color:#1FA971}
+  .t-tok{background:#FFF1E0;color:#B26A12}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--sub);margin:8px 0}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  .formula{background:#FAFBFD;border:1px dashed var(--line);border-radius:8px;
+    padding:10px 14px;font-size:13px;color:#33415C;margin:8px 0;font-family:"Consolas",monospace}
+  .chart{margin:18px 0}
+  .bar-row{display:flex;align-items:center;margin:7px 0}
+  .bar-label{width:180px;font-size:13px;color:#33415C;text-align:right;padding-right:12px}
+  .bar-track{flex:1;background:#F0F3F8;border-radius:6px;height:26px;position:relative;overflow:hidden}
+  .bar-fill{height:100%;border-radius:6px;display:flex;align-items:center;justify-content:flex-end;
+    padding-right:8px;color:#fff;font-size:12px;font-weight:600;white-space:nowrap}
+  .b1{background:#2F6BFF}.b2{background:#1FA971}.b3{background:#E08A2B}.b4{background:#D64545}
+  .foot{margin-top:30px;border-top:1px solid var(--line);padding-top:14px;
+    font-size:12px;color:var(--sub)}
+  .warn-box{background:#FFF7EF;border:1px solid #F3D9B8;border-radius:8px;padding:12px 14px;margin:14px 0}
+  .warn-box b{color:var(--warn)}
+  ul{margin:8px 0;padding-left:20px}
+  li{margin:4px 0}
+  .big{font-size:20px;font-weight:700}
+  .kv{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+  .kv div{background:#F6F8FC;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px}
+  .kv b{color:var(--brand)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>门诊后随访辅助系统（试点）报价单</h1>
+  <div class="meta">清禾综合医院 · 排程与记录辅助 + 红旗升级留痕（首期：骨科常规术后患者）</div>
+  <div class="meta">编制依据：业务需求发现报告（2026-10-23）｜ 报表口径：人民币（¥）</div>
+
+  <div class="note">
+    <b>一句话结论：</b>大模型 token 仅占系统总成本的 <b>0.2% 以内</b>。全量运行（1200 人/月）每月 token + 语音 + 短信也仅约 <b>¥215</b>；
+    18 万试点预算真正花在<b>一次性建设（开发/集成/合规部署）</b>和<b>持续性的人工复核与运维</b>上。
+    下述数字均为<b>可调整的估算</b>，报告原文明确「预算节省额缺基线数据」，故本报价仅供立项讨论，非验收承诺。
+  </div>
+
+  <h2>一、建设范围（对应报告 REQ-1~6）</h2>
+  <div class="kv">
+    <div>月出院量 <b>1200</b> 人</div>
+    <div>现状完成率 <b>61%</b> → 目标 <b>85%</b></div>
+    <div>单通时长 <b>12min</b>（重复填写 4min）</div>
+    <div>首期范围 <b>骨科常规术后</b></div>
+  </div>
+  <table>
+    <thead><tr><th>能力模块</th><th>对应需求</th><th>AI 边界（不可越线）</th><th>交付形态</th></tr></thead>
+    <tbody>
+      <tr><td>排程与分组辅助</td><td>REQ-1</td><td>仅生成排程建议，护士确认</td><td>系统功能</td></tr>
+      <tr><td>记录辅助 / 结构化生成</td><td>REQ-1</td><td>整理患者陈述，禁止诊断/调药/代签</td><td>LLM 应用</td></tr>
+      <tr><td>多渠道触达（电话/短信/IVR）</td><td>REQ-1,5</td><td>只读名单接口，无开处方/挂号权限</td><td>集成 + 语音</td></tr>
+      <tr><td>红旗症状即时升级 + 留痕</td><td>REQ-2</td><td>识别即停问卷、转具名接手人</td><td>LLM + 工单</td></tr>
+      <tr><td>问卷模板引擎（专科审核发布）</td><td>REQ-3</td><td>模板未审不得上线</td><td>审核工作流</td></tr>
+      <tr><td>联系人授权映射 + 去重补齐</td><td>REQ-4,5</td><td>缺失转人工修复，禁止猜测值</td><td>数据服务</td></tr>
+      <tr><td>全程留痕 / 审计 / 90 天留存</td><td>REQ-2,3,6</td><td>院内处理、最小必要、不外发</td><td>合规模块</td></tr>
+    </tbody>
+  </table>
+
+  <h2>二、一次性建设费（建议占用 18 万试点预算）</h2>
+  <table>
+    <thead><tr><th>分项</th><th class="num">估算（¥）</th><th>占比</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>需求设计 + 试点数据准备 + 红旗测试集</td><td class="num">25,000</td><td>14%</td><td>历史回放、测试集构建、口径对齐</td></tr>
+      <tr><td>系统开发与集成（排程/记录/触达/只读接口）</td><td class="num">70,000</td><td>39%</td><td>核心工程，最大头</td></tr>
+      <tr><td>LLM 应用开发（prompt/模板/红旗检测/记录生成/留痕）</td><td class="num">45,000</td><td>25%</td><td>含私有化部署调优</td></tr>
+      <tr><td>安全合规与院内私有化部署</td><td class="num">25,000</td><td>14%</td><td>院内处理、审计、权限</td></tr>
+      <tr><td>试点培训 + 首期人工复核 + 上线支持</td><td class="num">15,000</td><td>8%</td><td>报告强调复核为持续性支出</td></tr>
+      <tr class="tot"><td>合计</td><td class="num">180,000</td><td>100%</td><td>≈ 18 万试点预算上限</td></tr>
+    </tbody>
+  </table>
+  <div class="warn-box">
+    <b>预算口径提醒：</b>报告明确「18 万须扣除接口、培训、复核与维护成本，既有系统采购不纳入节省额」。
+    上表已把接口/培训/复核/维护<b>纳入</b>这 18 万里；若院方要求把复核与运维<b>单列常年支出</b>，则一次性建设应压缩至约 <b>15 万</b>，其余走月度运营费（见第三节）。
+  </div>
+
+  <h2>三、持续运营费（月度，通常不在 / 部分在 18 万内）</h2>
+  <table>
+    <thead><tr><th>分项</th><th class="num">试点（¥/月）</th><th class="num">全量（¥/月）</th><th>计算依据</th></tr></thead>
+    <tbody>
+      <tr><td>大模型 token + 语音（ASR/TTS）+ 短信</td><td class="num">54</td><td class="num">215</td><td>见第四节测算</td></tr>
+      <tr><td>人工复核（护士/专科确认）</td><td class="num">400</td><td class="num">1,600</td><td>0.5 / 2 人天·月，¥800/人天</td></tr>
+      <tr><td>维护 / 监控 / 培训</td><td class="num">3,000</td><td class="num">8,000</td><td>系统运维与规则迭代</td></tr>
+      <tr class="tot"><td>运营费小计</td><td class="num">3,454</td><td class="num">9,815</td><td>—</td></tr>
+      <tr><td>元年运营合计（×12）</td><td class="num">41,448</td><td class="num">117,780</td><td>—</td></tr>
+    </tbody>
+  </table>
+  <div class="note">其中 <b>大模型/语音/短信</b> 在元年运营中仅占 <b>¥648（试点）</b> 或 <b>¥2,580（全量）</b>，是整张报价里最小的一笔。</div>
+
+  <h2>四、大模型 Token 成本测算（核心）</h2>
+  <h3>4.1 单通随访（语音通道）用量拆解</h3>
+  <table>
+    <thead><tr><th>环节</th><th>用量假设</th><th class="num">单价（参考）</th><th class="num">单通成本</th></tr></thead>
+    <tbody>
+      <tr><td>LLM 对话（12 轮，约 7500 in / 3800 out tok）</td><td>系统提示词缓存命中 + 逐轮上下文</td><td class="num">in ¥0.006/1K<br>out ¥0.02/1K</td><td class="num">¥0.13</td></tr>
+      <tr><td>ASR 语音识别</td><td>4 分钟/通</td><td class="num">¥0.006/分钟</td><td class="num">¥0.024</td></tr>
+      <tr><td>TTS 语音合成</td><td>4 分钟/通</td><td class="num">¥0.02/分钟</td><td class="num">¥0.08</td></tr>
+      <tr><td>记录生成 + 红旗检测（末次调用）</td><td>约 1500 in / 800 out tok</td><td class="num">同上</td><td class="num">¥0.025</td></tr>
+      <tr class="tot"><td>语音接通单合计</td><td>—</td><td class="num">—</td><td class="num">¥0.23</td></tr>
+      <tr><td>未接通短信重试（仅短信，无 token）</td><td>2 条/人</td><td class="num">¥0.05/条</td><td class="num">¥0.10</td></tr>
+    </tbody>
+  </table>
+  <div class="formula">单月 token 费 = 接通人数 × ¥0.23 + 未接通人数 × ¥0.10</div>
+
+  <h3>4.2 月度汇总（两种规模）</h3>
+  <table>
+    <thead><tr><th>规模</th><th class="num">月均出院</th><th class="num">接通（61%）</th><th class="num">未接通</th><th class="num">月 token 费</th><th class="num">元年 token 费</th></tr></thead>
+    <tbody>
+      <tr><td>试点（骨科，假设占 25%）</td><td class="num">300</td><td class="num">183</td><td class="num">117</td><td class="num">¥54</td><td class="num">¥648</td></tr>
+      <tr><td>全量（全院）</td><td class="num">1,200</td><td class="num">732</td><td class="num">468</td><td class="num">¥215</td><td class="num">¥2,580</td></tr>
+    </tbody>
+  </table>
+
+  <h3>4.3 若采用院内私有化 GPU 部署</h3>
+  <p>报告要求「院内处理、不发送外部服务」，故更可能走私有化。此时 token <b>不再按量计费</b>，改为一次性算力摊销：</p>
+  <ul>
+    <li>全量每月约 <b>13.6M tokens（in+out）</b>，单张推理级 GPU（如 L4/A10）即可承载，3 年摊销后算力成本可忽略；</li>
+    <li>等价折算：上表全量 ¥2,580/年 的 token 费，对应算力投入约 <b>¥1–3 万一次性</b> + 电费 <b>¥200–500/月</b>；</li>
+    <li>ASR/TTS 若也本地化，则每月再省 ¥0.10/人 的语音费用，仅剩短信通道费。</li>
+  </ul>
+
+  <h2>五、成本结构可视化（元年视角 · 试点）</h2>
+  <div class="legend">
+    <span><span class="dot b1"></span>一次性建设费</span>
+    <span><span class="dot b2"></span>元年运营费（含人工复核+维护）</span>
+    <span><span class="dot b3"></span>其中：大模型/语音/短信</span>
+    <span><span class="dot b4"></span>其中：人工复核</span>
+  </div>
+  <div class="chart">
+    <div class="bar-row"><div class="bar-label">一次性建设费</div>
+      <div class="bar-track"><div class="bar-fill b1" style="width:100%">¥180,000</div></div></div>
+    <div class="bar-row"><div class="bar-label">元年运营费</div>
+      <div class="bar-track"><div class="bar-fill b2" style="width:23%">¥41,448</div></div></div>
+    <div class="bar-row"><div class="bar-label">　└ 其中人工复核</div>
+      <div class="bar-track"><div class="bar-fill b4" style="width:11%">¥4,800</div></div></div>
+    <div class="bar-row"><div class="bar-label">　└ 大模型/语音/短信</div>
+      <div class="bar-track"><div class="bar-fill b3" style="width:0.4%">¥648</div></div></div>
+  </div>
+  <div class="note">条形长度按比例（以 18 万为满格）。可见 <b>大模型 token 是整张图里几乎看不见的一条</b>——它不该成为预算焦点，重点应放在<b>建设质量</b>和<b>复核机制能否真正减负</b>上。</div>
+
+  <h2>六、关键假设与风险（呼应报告证据缺口）</h2>
+  <div class="warn-box">
+    <b>本报价为立项讨论口径，以下任一假设变动将影响金额：</b>
+    <ul style="margin:8px 0">
+      <li>试点规模按「骨科占全院 25%（300/月）」估算，实际占比需秦芮核实；</li>
+      <li>语音通道按 4 分钟/通、12 轮对话估 token，真实轮次取决于问卷长度；</li>
+      <li>模型单价取 2026 国内中档（¥0.006 in / ¥0.02 out /1K），私有化后改为算力摊销；</li>
+      <li>人工复核 ¥800/人天为假设，报告明确指出「复核成本高 = 护士确认环节没减下来」，须先测基线；</li>
+      <li>报告原文：访谈仅来自患者服务经理一人，护士/医生/信息/隐私四类角色无直接访谈，<b>节省额与基线未核实，不能据此对外承诺验收数字</b>。</li>
+    </ul>
+  </div>
+
+  <div class="foot">
+    编制说明：本报告所有数字均基于《业务需求发现报告（2026-10-23）》已确认事实推算，非实测基线。
+    报价口径：人民币；token 单价、语音单价、人工单价均为可调整参考值。正式立项前须完成报告所列四类角色补访谈与历史回放基线测算。
+  </div>
+
+</div>
+</body>
+</html>
