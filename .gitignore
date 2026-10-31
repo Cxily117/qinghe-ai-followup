@@ -27,4 +27,5 @@ deploy-qinghe/
 # 发布应用的平台内部标记文件
 .wbapp_*.genie
 *.genie
-followup/
+
+# 交付文档文件夹 followup/ 已正式入库（根目录同名副本已删除，不再重复跟踪）
