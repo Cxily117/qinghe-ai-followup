@@ -107,6 +107,7 @@
     const res = await fetch(API + path, {
       method: o.method || "GET",
       headers,
+      credentials: "same-origin", // 带上 HttpOnly Cookie：网关改写 Authorization 时靠它鉴权
       body: o.body ? JSON.stringify(o.body) : undefined,
     });
 
@@ -133,6 +134,10 @@
     state.sessions = [];
     state.sid = null;
     localStorage.removeItem(TOKEN_KEY);
+    // 服务端也要清 Cookie，否则退出后 HttpOnly Cookie 仍在，刷新页面等于没退
+    if (!silent) {
+      fetch(API + "/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => {});
+    }
     showLogin();
     if (silent) {
       loginError.textContent = "登录已过期，请重新登录";
@@ -699,6 +704,7 @@
           Accept: "text/event-stream",
           Authorization: "Bearer " + state.token,
         },
+        credentials: "same-origin", // 同上：Cookie 是主通道
         body: JSON.stringify({ session_id: state.sid, question }),
       });
       if (!res.ok) throw await readError(res);

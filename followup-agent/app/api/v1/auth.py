@@ -1,8 +1,9 @@
-"""认证路由：注册 / 登录 / 当前用户。"""
-from fastapi import APIRouter, HTTPException, status
+"""认证路由：注册 / 登录 / 当前用户 / 退出。"""
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import select
 
-from app.core.deps import CurrentUser, DbDep
+from app.core.config import get_settings
+from app.core.deps import TOKEN_COOKIE, CurrentUser, DbDep
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import User
 from app.schemas.auth import TokenOut, UserLogin, UserOut, UserRegister
@@ -41,7 +42,7 @@ async def register(payload: UserRegister, db: DbDep):
 
 
 @router.post("/login", response_model=TokenOut, summary="登录，换取 JWT")
-async def login(payload: UserLogin, db: DbDep):
+async def login(payload: UserLogin, request: Request, response: Response, db: DbDep):
     user = (
         await db.execute(select(User).where(User.username == payload.username))
     ).scalar_one_or_none()
@@ -52,7 +53,30 @@ async def login(payload: UserLogin, db: DbDep):
         )
     if user.status != "active":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账号已停用")
-    return TokenOut(access_token=create_access_token(user.id, user.role))
+
+    s = get_settings()
+    token = create_access_token(user.id, user.role)
+    # 同时下发 HttpOnly Cookie：浏览器后续请求自动携带，不依赖前端存 localStorage，
+    # 也不怕反向代理改写 Authorization 头。httponly=True 让 JS 读不到，XSS 偷不走。
+    forwarded = request.headers.get("x-forwarded-proto", "")
+    is_https = request.url.scheme == "https" or forwarded == "https"
+    response.set_cookie(
+        key=TOKEN_COOKIE,
+        value=token,
+        max_age=s.access_token_expire_minutes * 60,
+        httponly=True,
+        samesite="lax",
+        secure=is_https,  # 本地走 http，加了 Secure 浏览器会直接丢弃该 Cookie
+        path="/",
+    )
+    return TokenOut(access_token=token)
+
+
+@router.post("/logout", summary="退出登录（清 Cookie）")
+async def logout(response: Response):
+    """前端退出时调用：清掉 HttpOnly Cookie，服务端无需维护黑名单。"""
+    response.delete_cookie(TOKEN_COOKIE, path="/")
+    return {"ok": True}
 
 
 @router.get("/me", response_model=UserOut, summary="当前登录用户信息")
