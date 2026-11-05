@@ -789,6 +789,10 @@
     const u = state.user;
     $("#who").textContent =
       (u.full_name || u.username) + (u.role === "admin" ? "（管理员）" : "");
+    // 管理后台入口只对 admin 显示：问答页是医护工作台，管理员的权力在 /admin 后台，
+    // 之前只靠名字后面的小徽章区分，用户根本看不出差别。
+    const adminLink = $("#admin-link");
+    if (adminLink) adminLink.hidden = u.role !== "admin";
     loginView.hidden = true;
     appView.hidden = false;
     loginError.hidden = true;

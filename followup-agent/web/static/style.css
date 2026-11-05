@@ -52,6 +52,9 @@ button { font-family: inherit; font-size: 14px; cursor: pointer; }
 .btn.primary:hover:not(:disabled) { background: var(--accent-dark); border-color: var(--accent-dark); }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
 .btn.ghost:hover { background: #eceef3; color: var(--text); }
+/* 头部「管理后台」入口是 <a>，补齐按钮化外观与下划线抑制 */
+a.btn { display: inline-block; text-decoration: none; }
+a.btn.ghost.admin-link { color: var(--accent); font-weight: 500; }
 .btn.link { background: none; border: none; color: var(--accent); padding: 6px 0; }
 .btn.link:hover { text-decoration: underline; }
 .btn.block { display: block; width: 100%; }
