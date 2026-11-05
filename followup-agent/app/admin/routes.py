@@ -607,6 +607,31 @@ async def user_set_status(request: Request, user_id: int, db: DbDep, status: str
     return _back("/admin/users", msg=f"账号 {target.username} 已{label}")
 
 
+@router.post("/admin/users/{user_id}/password")
+async def user_reset_password(
+    request: Request, user_id: int, db: DbDep, new_password: str = Form(...)
+):
+    """管理员重置他人密码：仅 role=admin 可用，且不能对自己操作。
+
+    真实场景：医护忘记密码来找管理员、人员交接需要换初始密码。
+    自助改密码（需验旧密码）在问答页「设置」里，两者不共用一个入口。
+    """
+    operator, blocked = await _guard(request, db)
+    if blocked:
+        return blocked
+    target = await db.get(User, user_id)
+    if target is None:
+        return _back("/admin/users", err="账号不存在，可能已被删除")
+    try:
+        await user_service.reset_password(db, target, new_password, operator)
+    except AppError as exc:
+        return _back("/admin/users", err=exc.message)
+    return _back(
+        "/admin/users",
+        msg=f"已重置 {target.username} 的密码，请线下告知本人并提醒尽快自行修改",
+    )
+
+
 # ------------------------------------------------------------------ 对话审计
 
 

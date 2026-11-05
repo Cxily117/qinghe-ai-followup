@@ -567,6 +567,82 @@ def main() -> int:
         ok &= check(c.get("/admin/reports").status_code == 403, "staff 访问报表页 → 403")
         c.cookies.clear()
 
+        # ---------------- 改密码：自助 vs 管理员重置 ----------------
+        print("[27] 改密码：自助须验旧密码、管理员可重置他人、医护越权被拦")
+        pwd_user = f"smoke_pwd_{suffix}"
+        pwd_id = c.post(
+            "/api/v1/auth/register",
+            json={"username": pwd_user, "password": "Passw0rd!", "full_name": pwd_user},
+        ).json()["id"]
+        pwd_tok = c.post(
+            "/api/v1/auth/login", json={"username": pwd_user, "password": "Passw0rd!"}
+        ).json()["access_token"]
+        pwd_h = {"Authorization": f"Bearer {pwd_tok}"}
+
+        wrong_old = c.post(
+            "/api/v1/auth/password",
+            headers=pwd_h,
+            json={"old_password": "nope", "new_password": "NewPass123"},
+        )
+        ok &= check(
+            wrong_old.status_code == 400,
+            "自助改密码：旧密码填错 → 400（不能只凭已登录就改密）",
+        )
+
+        changed = c.post(
+            "/api/v1/auth/password",
+            headers=pwd_h,
+            json={"old_password": "Passw0rd!", "new_password": "NewPass123"},
+        )
+        old_login = c.post(
+            "/api/v1/auth/login", json={"username": pwd_user, "password": "Passw0rd!"}
+        )
+        new_login = c.post(
+            "/api/v1/auth/login", json={"username": pwd_user, "password": "NewPass123"}
+        )
+        ok &= check(
+            changed.status_code == 200
+            and old_login.status_code == 401
+            and new_login.status_code == 200,
+            "自助改密码：旧密码立即失效、新密码可登录",
+        )
+
+        # 管理员重置他人密码（护士忘记密码的真实场景）
+        c.cookies.set("qh_admin", admin)
+        reset = c.post(
+            f"/admin/users/{pwd_id}/password", data={"new_password": "ResetPass9"}
+        )
+        reset_login = c.post(
+            "/api/v1/auth/login", json={"username": pwd_user, "password": "ResetPass9"}
+        )
+        ok &= check(
+            reset.status_code == 303 and reset_login.status_code == 200,
+            "管理员重置他人密码 → 目标可用新密码登录",
+        )
+
+        # 管理员不能重置自己（自己改密码必须走验旧密码的自助入口）
+        self_reset = c.post(
+            f"/admin/users/{admin_id}/password", data={"new_password": "SelfReset1"}
+        )
+        ok &= check(
+            self_reset.status_code == 303 and "设置" in _loc(self_reset),
+            "防呆：管理员不能重置自己的密码",
+        )
+
+        # 医护绕过页面直接打接口 → 页面级闸门 403，且密码没被改掉
+        c.cookies.set("qh_admin", staff)
+        hacked = c.post(
+            f"/admin/users/{pwd_id}/password", data={"new_password": "Hack12345"}
+        )
+        still_reset = c.post(
+            "/api/v1/auth/login", json={"username": pwd_user, "password": "ResetPass9"}
+        )
+        ok &= check(
+            hacked.status_code == 403 and still_reset.status_code == 200,
+            "医护直接调重置接口 → 403（密码未被改动）",
+        )
+        c.cookies.clear()
+
     print("\n" + ("全部通过 ✅" if ok else "存在失败项 ❌"))
     return 0 if ok else 1
 

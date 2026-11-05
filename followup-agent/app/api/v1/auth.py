@@ -6,7 +6,13 @@ from app.core.config import get_settings
 from app.core.deps import TOKEN_COOKIE, CurrentUser, DbDep
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.user import User
-from app.schemas.auth import TokenOut, UserLogin, UserOut, UserRegister
+from app.schemas.auth import (
+    PasswordChange,
+    TokenOut,
+    UserLogin,
+    UserOut,
+    UserRegister,
+)
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
@@ -82,3 +88,27 @@ async def logout(response: Response):
 @router.get("/me", response_model=UserOut, summary="当前登录用户信息")
 async def me(user: CurrentUser):
     return user
+
+
+@router.post("/password", summary="修改自己的密码")
+async def change_password(payload: PasswordChange, user: CurrentUser, db: DbDep):
+    """自助改密码：验证旧密码 → 校验新密码 → 落库。
+
+    为什么必须验旧密码：浏览器里的登录态（HttpOnly Cookie）可能被他人借用，
+    只凭「已登录」就允许改密码，等于坐在你电脑前的人能直接接管账号。
+
+    已知取舍：JWT 是无状态的，改密码不会让已签发的 token 立即失效
+    （有效期 12 小时，到期自然失效）。要做到「改密即踢下线」需要给用户表
+    加 token 版本号并在鉴权时比对，属于后续加固项，此处不为改密码引入新表结构。
+    """
+    if not verify_password(payload.old_password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="当前密码不正确"
+        )
+    if payload.old_password == payload.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="新密码不能与当前密码相同"
+        )
+    user.password_hash = hash_password(payload.new_password)
+    await db.commit()
+    return {"ok": True, "message": "密码已修改，下次登录请使用新密码"}

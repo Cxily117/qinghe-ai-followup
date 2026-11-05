@@ -63,6 +63,14 @@
                 <button class="btn btn-sm" type="submit" name="status" value="active">启用</button>
                 {% endif %}
               </form>
+              {# 重置密码：医护忘记密码 / 人员交接时用；不能给自己重置（自己走问答页「设置」） #}
+              <form class="inline-form" method="post" action="/admin/users/{{ u.id }}/password"
+                    onsubmit="return confirm('确认重置 {{ u.username }} 的密码？本人需用新密码重新登录');">
+                <input class="input" type="password" name="new_password" placeholder="新密码（≥6位）"
+                       minlength="6" maxlength="72" required
+                       style="width:130px;padding:4px 8px;font-size:12px">
+                <button class="btn btn-sm btn-ghost" type="submit">重置密码</button>
+              </form>
             </div>
             {% endif %}
           </td>

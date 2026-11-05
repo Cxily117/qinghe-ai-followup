@@ -134,6 +134,9 @@
     state.sessions = [];
     state.sid = null;
     localStorage.removeItem(TOKEN_KEY);
+    // 设置弹窗若开着，退出时一并关掉，避免残留在登录页上
+    const sv = $("#settings");
+    if (sv) sv.hidden = true;
     // 服务端也要清 Cookie，否则退出后 HttpOnly Cookie 仍在，刷新页面等于没退
     if (!silent) {
       fetch(API + "/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => {});
@@ -190,6 +193,77 @@
   });
 
   $("#logout").addEventListener("click", () => logout(false));
+
+  /* ---------------------------------------------------------- 设置（自助改密码） */
+
+  const settingsView = $("#settings");
+
+  function openSettings() {
+    const u = state.user;
+    if (!u) return;
+    const roleLabel = u.role === "admin" ? "管理员" : "医护";
+    $("#settings-who").textContent =
+      "当前账号：" + (u.full_name || u.username) + "（" + roleLabel + "）· " + u.username;
+    $("#password-form").reset();
+    const msg = $("#password-msg");
+    msg.hidden = true;
+    msg.className = "settings-msg";
+    settingsView.hidden = false;
+    $("#pwd-old").focus();
+  }
+
+  function closeSettings() {
+    settingsView.hidden = true;
+  }
+
+  $("#settings-btn").addEventListener("click", openSettings);
+  $("#settings-close").addEventListener("click", closeSettings);
+  // 点遮罩空白处关闭；点卡片内部不关
+  settingsView.addEventListener("click", (e) => {
+    if (e.target === settingsView) closeSettings();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !settingsView.hidden) closeSettings();
+  });
+
+  $("#password-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const oldPwd = $("#pwd-old").value;
+    const newPwd = $("#pwd-new").value;
+    const newPwd2 = $("#pwd-new2").value;
+    const msg = $("#password-msg");
+    const submit = $("#password-submit");
+
+    function fail(text) {
+      msg.textContent = text;
+      msg.className = "settings-msg err";
+      msg.hidden = false;
+    }
+
+    // 前端只做「明显错误」的即时提示，真正的规则以服务端为准
+    if (newPwd.length < 6) return fail("新密码至少 6 位");
+    if (newPwd !== newPwd2) return fail("两次输入的新密码不一致");
+    if (newPwd === oldPwd) return fail("新密码不能与当前密码相同");
+
+    msg.hidden = true;
+    submit.disabled = true;
+    submit.textContent = "保存中…";
+    try {
+      await api("/auth/password", {
+        method: "POST",
+        body: { old_password: oldPwd, new_password: newPwd },
+      });
+      msg.textContent = "密码已修改，下次登录请使用新密码";
+      msg.className = "settings-msg ok";
+      msg.hidden = false;
+      $("#password-form").reset();
+    } catch (err) {
+      fail(err.message || "修改失败，请稍后重试");
+    } finally {
+      submit.disabled = false;
+      submit.textContent = "保存新密码";
+    }
+  });
 
   /* ---------------------------------------------------------- 会话列表 */
 

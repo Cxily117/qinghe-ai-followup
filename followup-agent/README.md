@@ -120,6 +120,13 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - **授权动作有防呆**（`user_service.set_role / set_status`）：
   不能操作自己的账号；系统始终保留至少一名可用管理员，最后一个 admin 不可降级/停用；
   停用立即生效——登录与页面鉴权都以数据库 `status` 为准，不信任 token。
+- **改密码分两条路，互不越界**：
+  ① 自助——问答页右上角「设置」→ `POST /auth/password`，**必须验当前密码**
+  （浏览器登录态可能被他人借用，只凭"已登录"就能改密等于账号可被接管）；
+  ② 管理员重置他人——后台「用户与授权」每行的「重置密码」，用于医护忘记密码/人员交接。
+  管理员**不能重置自己**（自己走 ①，保留旧密码校验）；医护调这个接口被页面级闸门拦下（403）。
+  已知取舍：JWT 无状态，改密不会让已签发 token 立刻失效（最长 12 小时自然过期），
+  要"改密即踢下线"需引入 token 版本号，属后续加固项。
 - 表结构沿用 `users.role / users.status`，无迁移。
 
 ## 接口清单
@@ -130,6 +137,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | POST | `/api/v1/auth/register` | 注册（只发医护；系统零管理员时首个注册自动成为管理员） | 公开 |
 | POST | `/api/v1/auth/login` | 登录换取 JWT | 公开 |
 | GET | `/api/v1/auth/me` | 当前用户 | 登录 |
+| POST | `/api/v1/auth/password` | 修改自己的密码（须验旧密码） | 登录 |
 | POST | `/api/v1/kb/documents` | 上传制度文档（md/txt/**pdf**，自动切片+向量化，落 draft） | 管理员 |
 | POST | `/api/v1/kb/documents/{id}/publish` | 发布（进入检索，旧版自动归档） | 管理员 |
 | POST | `/api/v1/kb/documents/{id}/archive` | 归档下架（退出检索，保留切片与原文） | 管理员 |

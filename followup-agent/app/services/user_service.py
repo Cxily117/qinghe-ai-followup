@@ -78,6 +78,28 @@ async def set_status(db: AsyncSession, target: User, status: str, operator: User
     return target
 
 
+async def reset_password(
+    db: AsyncSession, target: User, new_password: str, operator: User
+) -> User:
+    """管理员重置他人密码（忘记密码 / 交接账号时用）。
+
+    权限边界：
+      - 调用点已在后台页面用 _guard 校验 role=admin（页面 + 表单两道闸门），
+        这里再做一次身份校验，避免有人绕开页面直接打接口；
+      - 管理员不能重置自己的密码 —— 自己改密码走问答页「设置」（要验旧密码），
+        否则「已登录即可改密」等于绕过了旧密码校验。
+    """
+    if operator.role != "admin" or operator.status != "active":
+        raise AppError("FORBIDDEN", message="仅管理员可重置他人密码")
+    if target.id == operator.id:
+        raise AppError("FORBIDDEN", message="修改自己的密码请用问答页右上角「设置」")
+    if not (6 <= len(new_password) <= 72):
+        raise AppError("VALIDATION_ERROR", message="密码长度需在 6-72 位之间")
+    target.password_hash = hash_password(new_password)
+    await db.commit()
+    return target
+
+
 async def ensure_admin(
     db: AsyncSession, *, username: str, password: str, full_name: str = ""
 ) -> User:

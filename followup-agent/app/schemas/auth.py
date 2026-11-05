@@ -20,6 +20,13 @@ class UserLogin(BaseModel):
     password: str
 
 
+class PasswordChange(BaseModel):
+    """自助改密码：必须验证当前密码，防止借他人已登录的浏览器改掉密码。"""
+
+    old_password: str = Field(min_length=1, max_length=72, description="当前密码")
+    new_password: str = Field(min_length=6, max_length=72, description="新密码，至少 6 位")
+
+
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
