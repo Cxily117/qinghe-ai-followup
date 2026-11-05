@@ -72,7 +72,9 @@ async def login(payload: UserLogin, request: Request, response: Response, db: Db
         max_age=s.access_token_expire_minutes * 60,
         httponly=True,
         samesite="lax",
-        secure=is_https,  # 本地走 http，加了 Secure 浏览器会直接丢弃该 Cookie
+        # 生产环境一律带 Secure：宁可在 http 下取不到 Cookie（会立刻暴露部署问题），
+        # 也不要让令牌在明文连接上来回传
+        secure=is_https or s.is_prod,
         path="/",
     )
     return TokenOut(access_token=token)

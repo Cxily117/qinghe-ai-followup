@@ -188,12 +188,16 @@ async def login_submit(
 
     token = create_access_token(user.id, user.role)
     response = RedirectResponse(_safe_next(next), status_code=303)
+    s = get_settings()
+    forwarded = request.headers.get("x-forwarded-proto", "")
     response.set_cookie(
         COOKIE_NAME,
         token,
-        max_age=get_settings().access_token_expire_minutes * 60,
+        max_age=s.access_token_expire_minutes * 60,
         httponly=True,  # JS 读不到，XSS 偷不走
         samesite="lax",  # 挡住跨站表单提交（基础 CSRF 防护）
+        # 生产环境一律 Secure：后台是能改知识库和账号的地方，不该有明文传输的可能
+        secure=request.url.scheme == "https" or forwarded == "https" or s.is_prod,
         path="/",
     )
     return response

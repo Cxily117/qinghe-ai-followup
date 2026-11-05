@@ -15,6 +15,7 @@ SSE 事件（原有问答事件之外）：
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 import time
 from datetime import datetime, timedelta
@@ -23,7 +24,7 @@ from typing import AsyncIterator
 from app.agents import handlers
 from app.agents.gateway.base import get_llm
 from app.agents.guardrails import apply_output_guardrails
-from app.agents.harness import AgentHarness, RoundRecord, digest_of
+from app.agents.harness import AgentHarness, RoundRecord, digest_of, mask_ids
 from app.agents.runtime import RunState
 from app.core.config import get_settings
 from app.core.database import SessionLocal
@@ -32,6 +33,23 @@ from app.models.agent import AgentConfirmation, AgentRun, AgentToolCall
 from app.services import chat_service, prompt_service
 
 logger = logging.getLogger(__name__)
+
+# PHI 正则：院外联系方式与身份证；院内编号由 harness.mask_ids 处理
+_PHONE_RE = re.compile(r"\b1[3-9]\d{9}\b")
+_IDCARD_RE = re.compile(r"\b\d{17}[\dXx]\b")
+
+
+def redact_question(text: str) -> str:
+    """运行记录入库前的脱敏（上线清单 S2）。
+
+    为什么只在这一层做：`messages.content` 是医护自己要回看的业务记录，属于
+    "业务必需留存"；而 `agent_runs` 是审计与回放用途，没有存原文的必要，
+    存了就是把 PHI 又多落一份。掩码保留首尾，人工比对仍可用，但反查不到。
+    """
+    text = mask_ids(text or "")
+    text = _PHONE_RE.sub(lambda m: m.group(0)[:3] + "*" * 4 + m.group(0)[-4:], text)
+    text = _IDCARD_RE.sub(lambda m: m.group(0)[:4] + "*" * 10 + m.group(0)[-4:], text)
+    return text
 
 # 工具名 → 执行体。8 个工具全部在这里注册；
 # 能不能被模型看见由 runtime/tools 的解锁条件决定，不在这里裁剪。
@@ -109,7 +127,8 @@ async def stream_agent_events(
             session_id=session.id,
             user_id=user_id,
             mode=s.agent_mode,
-            question=question[:2000],
+            # 审计表不存问题原文（S2）：住院号/手机号/身份证只留首尾
+            question=redact_question(question)[:2000],
         )
         db.add(run)
         await db.commit()

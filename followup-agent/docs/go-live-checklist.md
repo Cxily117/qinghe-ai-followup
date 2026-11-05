@@ -10,8 +10,8 @@
 |---|---|---|---|---|---|
 | S1 | 审计表 PHI 脱敏 | 后端负责人 | 跑 `scripts/smoke_test.py`[23]；再直连库 `SELECT args_redacted, result_digest FROM agent_tool_calls ORDER BY id DESC LIMIT 50` 与 `GET /api/v1/agent/runs/{uid}` 回放逐条看 | 审计入参中住院号/姓名只留掩码（`ZY****01`），结果只存 sha256 摘要；回放接口与页面无一处完整住院号 | ✅ |
 | S2 | 会话与运行记录的 PHI 落点盘点 | 后端负责人 + DBA | 三张表抽查 20 行：`messages.content`、`agent_runs.question`、`followup_task_drafts.patient_ref`；核对访问权限矩阵 | `agent_runs.question` 现为**原文**，须改为脱敏存储或入库前掩码；三张表仅应用账号可读，DBA 走只读审计视图；有书面说明「为何业务必需留存」 | ⚠️ |
-| S3 | 审计日志保留策略 | 安全合规官 + 医务处质控 | 查 `agent_runs/agent_tool_calls/chat_audit_marks/messages` 是否有清理任务；对照《医疗机构病历管理规定》与等保要求出书面策略 | 在线保留 ≥6 个月、归档 ≥3 年；定时归档任务已上线并有执行记录；删除操作本身留痕 | ⚠️ |
-| S4 | 凭据与传输加固 | SRE/运维 | `grep jwt_secret .env`；`curl -I https://域名/admin`；检查 `set_cookie` 是否带 `secure`；测 token 过期行为 | 无 `dev-secret-change-me`；全站 HTTPS + HSTS；管理端 Cookie 带 `Secure`+`HttpOnly`+`SameSite=Lax`；`access_token_expire_minutes` 由 720 下调至 ≤120 并有刷新策略 | ⚠️ |
+| S3 | 审计日志保留策略 | 安全合规官 + 医务处质控 | 查 `agent_runs/agent_tool_calls/chat_audit_marks/messages` 是否有清理任务；对照《医疗机构病历管理规定》与等保要求出书面策略 | 在线保留 ≥6 个月、归档 ≥3 年；定时归档任务已上线并有执行记录；删除操作本身留痕 | 🟡 2026-11-05：`scripts/archive_audit.py` 已交付（预演/`--apply`/sha256+manifest 留痕，人工标记不删），**尚需**院方确认保留年限并挂到计划任务 |
+| S4 | 凭据与传输加固 | SRE/运维 | `grep jwt_secret .env`；`curl -I https://域名/admin`；检查 `set_cookie` 是否带 `secure`；测 token 过期行为 | 无 `dev-secret-change-me`；全站 HTTPS + HSTS；管理端 Cookie 带 `Secure`+`HttpOnly`+`SameSite=Lax`；`access_token_expire_minutes` 由 720 下调至 ≤120 并有刷新策略 | ✅ 2026-11-05：密钥已轮换为 64 位随机值、令牌 720→120 分钟、问答端与后台 Cookie 均带 Secure；`APP_ENV=prod` 时默认密钥/超长有效期会**直接拒绝启动**。HSTS 由托管平台负责，需在平台上确认 |
 | S5 | 备份与恢复演练 | DBA + SRE | 从昨日 PG 备份恢复到干净库 → 改 `DATABASE_URL` 指向恢复库 → 启动服务跑冒烟 26 步 + 三条轨迹 | RPO ≤24h、RTO ≤2h；恢复后冒烟全绿、抽查 10 条会话与草稿内容一致；演练报告归档签字 | ⚠️ |
 
 ## 二、并发与限流（LLM 配额与峰值控制）
@@ -19,7 +19,7 @@
 | # | 检查项 | 负责人角色 | 验证方法 | 通过标准 | 现状 |
 |---|---|---|---|---|---|
 | C1 | LLM 供应商配额与预算告警 | SRE/运维 + 产品负责人 | 供应商控制台设置 RPM/TPM 与日预算告警；压测 30 分钟观察用量曲线 | 峰值用量 ≤配额的 70%；日预算告警阈值已配（80%/100% 两档）；超限时有人收到通知 | ⚠️ |
-| C2 | 应用层限流（当前缺失） | 后端负责人 | 用 `hey -z 60s -c 20` 打 `/api/v1/chat` 与 `/api/v1/agent/chat`；再以单账号高频请求验证用户级限流 | 超出阈值返回 **429 + 中文 envelope + request_id**；单用户 ≤N 次/分钟、单 IP ≤M 次/分钟；限流命中率可观测 | ⚠️ |
+| C2 | 应用层限流 | 后端负责人 | 用 `hey -z 60s -c 20` 打 `/api/v1/chat` 与 `/api/v1/agent/chat`；再以单账号高频请求验证用户级限流 | 超出阈值返回 **429 + 中文 envelope + request_id**；单用户 ≤N 次/分钟、单 IP ≤M 次/分钟；限流命中率可观测 | ✅ 2026-11-05：`app/core/ratelimit.py` 滑动窗口，登录 20/min·IP、问答 30/min·用户 + 120/min·IP、智能体 15/min·用户；冒烟 [28] 段覆盖 401→429 与 Retry-After。**进程内计数**，多副本需换 Redis |
 | C3 | 单请求成本闸门 | 后端负责人 | 构造诱导循环的提问（"再查一次""换个说法再查"）；查 `agent_runs.steps` 与 `agent_tool_calls` 条数分布 | 单轮工具调用 ≤5（`agent_max_steps`）、检索 ≤3（`agent_search_limit`）、单条工具结果回灌 ≤600 字；单请求 token 成本不超预算上限 | ✅ |
 | C4 | 数据库连接与 SSE 长连接 | SRE/运维 + 后端负责人 | 50 并发 SSE 跑 10 分钟：`locust`/自写 asyncio 脚本；同时观察 `pg_stat_activity` 与 uvicorn worker 数 | 无连接池耗尽；SSE 首字节 P95 <3s；错误率 <1%；worker 数与 `pool_size` 匹配（≥并发/10） | 🟡 |
 | C5 | 高峰降级预案 | SRE + 产品负责人 | 演练三种开关：`AGENT_MODE=strict`（只读工具）、`AGENT_ENABLED=false`（仅固定 RAG）、前端隐藏智能体入口 | 开关 1 分钟内生效；降级后 `/chat` 全链路可用、写操作零下发；医护端有"标准模式"提示；操作记入变更单 | ✅ |
@@ -56,7 +56,9 @@
 
 ## 放行结论（QA 意见）
 
-**必须清零的阻断项（5 项）**：S2（`agent_runs.question` 存 PHI 原文）、S3（无日志保留策略）、S4（默认密钥/无 Secure/12h token）、**C2（应用层零限流，LLM 成本与雪崩风险敞口最大）**、S5（未做恢复演练）。
+**2026-11-05 复核**：原 5 项阻断已清 2 项 —— **S4**（JWT 密钥轮换为 64 位随机值、令牌 720→120 分钟、两端 Cookie 均带 Secure、`APP_ENV=prod` 配置不合格直接拒绝启动）、**C2**（`app/core/ratelimit.py` 滑动窗口限流，冒烟 [28] 段覆盖）；**S3 降为 🟡**（`scripts/archive_audit.py` 已交付，待院方定保留年限并挂计划任务）。
+
+**仍需清零的阻断项（3 项）**：S2（`agent_runs.question` 存 PHI 原文）、S3（保留年限待确认 + 定时任务未挂）、S5（未做恢复演练）。
 
 **建议同批完成（非阻断但影响可运维性）**：C1 配额告警、C4 连接池压测、P2/P3 注入用例补自动化、R2 迁移往返、R5 整站演练。
 

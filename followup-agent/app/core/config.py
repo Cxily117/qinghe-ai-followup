@@ -15,6 +15,17 @@ class Settings(BaseSettings):
     app_name: str = "随访智能体系统"
     api_v1_prefix: str = "/api/v1"
 
+    # 运行环境：dev（本机）/ prod（院内或云端正式环境）。
+    # prod 下有两条硬约束：不允许默认 JWT 密钥、Cookie 强制 Secure。
+    app_env: str = "dev"
+
+    # ---- 限流（上线清单 C2）----
+    rate_limit_enabled: bool = True
+    rate_limit_user_per_min: int = 30   # 单账号每分钟问答次数
+    rate_limit_ip_per_min: int = 120    # 单 IP 每分钟问答次数（兜底）
+    rate_limit_login_per_min: int = 20  # 单 IP 每分钟登录尝试（防撞库）
+    rate_limit_allow_loopback: bool = True  # 本机回环豁免，便于开发与冒烟
+
     # 开发态默认 SQLite（零依赖起步）；生产切 PostgreSQL+pgvector
     database_url: str = "sqlite+aiosqlite:///./dev.db"
 
@@ -62,6 +73,27 @@ class Settings(BaseSettings):
     def is_postgres(self) -> bool:
         """是否跑在 PostgreSQL 上——决定向量列用 pgvector 还是 JSON 降级。"""
         return self.database_url.startswith("postgresql")
+
+    @property
+    def is_prod(self) -> bool:
+        return self.app_env.strip().lower() in {"prod", "production"}
+
+    def production_problems(self) -> list[str]:
+        """生产环境的硬约束自检，返回问题清单（空列表 = 通过）。
+
+        为什么要写成代码而不是写在文档里：文档没人读，默认密钥会被一路带到线上。
+        `APP_ENV=prod` 时这些条件不满足就**拒绝启动**，比事后排查便宜得多。
+        """
+        problems: list[str] = []
+        if self.jwt_secret in {"", "dev-secret-change-me", "change-me"}:
+            problems.append("JWT_SECRET 仍是默认值，请生成随机密钥")
+        if len(self.jwt_secret) < 32:
+            problems.append("JWT_SECRET 长度不足 32 位")
+        if self.access_token_expire_minutes > 240:
+            problems.append("ACCESS_TOKEN_EXPIRE_MINUTES 超过 240 分钟（改密后旧令牌仍有效太久）")
+        if not self.llm_api_key:
+            problems.append("LLM_API_KEY 为空")
+        return problems
 
 
 @lru_cache

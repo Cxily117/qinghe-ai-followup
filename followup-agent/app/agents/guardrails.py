@@ -209,21 +209,26 @@ def apply_output_guardrails(
         )
         flags["dropped_citations"] = dropped
 
+    # 模型没写编号、但检索确实命中了条文：把「可以对照哪几条」挂上去
+    # （前端据此渲染来源卡片）。这比显示模型自己写的文档名更可核对。
+    #
+    # 注意不要在这里用「回答长度」当前提：短回答同样可能在陈述制度结论
+    # （「第 5 天加做一次电话复核」这种一句话结论最常见），旧版要求 ≥60 字，
+    # 结果正是这种最该给出来源的短答案反而没有来源卡片。
+    if not citations and n_sources:
+        citations = list(range(1, min(n_sources, 2) + 1))
+        flags["citations_attached"] = True
+        # 给了来源卡片，就要说清"这不是逐句引用"——否则读者会以为每条都能对上号
+        answer = (
+            answer.rstrip()
+            + "\n\n（本条回答未逐句标注条文编号，以上为相关条文摘要，请对照下方来源核对。）"
+        )
+
     # 「有实质内容却没引用任何资料」= 模型在靠自身知识作答，制度问答里这是高风险行为。
     # 不擅自删改内容（可能把有用信息删没），但必须打标，供质控抽查与前端提示。
     if not citations and len(answer) >= 60:
         flags["uncited_answer"] = True
         flags["suspected_general_knowledge"] = True
-        # 模型没写编号，但检索确实命中了条文：不替它下结论，只把「可以对照哪几条」
-        # 挂上去（前端据此渲染来源卡片）。这比显示模型自己写的文档名更可核对。
-        if n_sources:
-            citations = list(range(1, min(n_sources, 2) + 1))
-            flags["citations_attached"] = True
-            # 给了来源卡片，就要说清"这不是逐句引用"——否则读者会以为每条都能对上号
-            answer = (
-                answer.rstrip()
-                + "\n\n（本条回答未逐句标注条文编号，以上为相关条文摘要，请对照下方来源核对。）"
-            )
 
     if contains_medical_advice(answer):
         flags["medical_advice_suspected"] = True

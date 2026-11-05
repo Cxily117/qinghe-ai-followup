@@ -65,6 +65,8 @@ ERRORS: dict[str, tuple[int, str]] = {
     "AGENT_CONFIRM_NOT_FOUND": (404, "没有待确认的草稿，可能已处理或已过期"),
     "AGENT_CONFIRM_CLOSED": (409, "本次运行已结束，没有待确认的草稿"),
     "AGENT_CONFIRM_EXPIRED": (409, "确认单已过期（10 分钟），请重新发起随访安排"),
+    # 限流
+    "RATE_LIMITED": (429, "请求过于频繁，请稍后再试"),
     # 上游与服务
     "LLM_UPSTREAM": (502, "模型调用失败，请稍后重试"),
     "KB_UNAVAILABLE": (502, "知识库服务异常，请稍后重试"),

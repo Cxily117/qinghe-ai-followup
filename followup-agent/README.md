@@ -415,7 +415,7 @@ POST /tasks            → draft ──confirm（人工）──→ confirmed（
 
 ```bash
 uvicorn app.main:app --port 8000 &
-python scripts/smoke_test.py --base-url http://127.0.0.1:8000        # 27 段 81 断言：接口与页面
+python scripts/smoke_test.py --base-url http://127.0.0.1:8000        # 30 段 103 断言：接口与页面
 python scripts/trajectory_test.py --base-url http://127.0.0.1:8000   # 三条轨迹：过程与闸门
 ```
 
@@ -428,10 +428,12 @@ python scripts/trajectory_test.py --base-url http://127.0.0.1:8000   # 三条轨
 **前端托管（GET / 单页 + /static/app.js）** →
 **管理后台（staff 登后台被拒 / 接口 403 / 上传 md 切片 / 删除已发布 409 / 提示词保存新版本 / 缺约束 422 / 问答 meta 记录新版本 / 审计筛选疑似 / 标记与撤销 / 各页面渲染 200）** →
 **智能体（SSE 事件完整 / 最终答案只发一个事件 / final_text 无重复 / 回放工具链首个必为
-search_policy / 审计入参不含原始住院号 / 他人 run 404）** →
+search_policy / 审计入参不含原始住院号 / **运行记录里的问题原文也已脱敏** / 他人 run 404）** →
 **质控报表（六组指标齐全 / days 钳制 422 / staff 403 / CSV 带 BOM / 后台页面渲染 / 越权 403）** →
-**用户与授权（注册 role=admin 422 / 默认 staff / 授予与回收管理员 / 不能操作自己 / 停用立即无法登录 / 启用恢复）**。
-退出码 0 = 全绿（27 段 81 断言）。每次运行会埋一个唯一编号提问，避免被库里历史文档干扰。
+**用户与授权（注册 role=admin 422 / 默认 staff / 授予与回收管理员 / 不能操作自己 / 停用立即无法登录 / 启用恢复）** →
+**改密码（自助须验旧密码 / 管理员可重置他人 / 不能重置自己 / 医护越权 403）** →
+**限流（连续失败登录前 20 次 401、第 21 次 429 + 中文 envelope + Retry-After / 回环豁免）**。
+退出码 0 = 全绿（30 段 103 断言）。每次运行会埋一个唯一编号提问，避免被库里历史文档干扰。
 
 ### D6 质控指标口径（六组）
 
@@ -446,7 +448,7 @@ search_policy / 审计入参不含原始住院号 / 他人 run 404）** →
 | `tools` | 工具 Top10 | 次数、失败率、平均耗时 |
 | `marks` | 审计标记 | 窗口内未撤销的 high_risk / watch 计数 |
 
-## 数据模型（12 张表）
+## 数据模型（13 张表）
 
 前 6 张：`users` / `sessions` / `messages` / `kb_documents` / `kb_chunks` / `followup_task_drafts`
 详见 `随访智能体技术架构方案.md` 第 4 节。
@@ -489,9 +491,9 @@ followup-agent/
 │   │   ├── routes.py         #   页面路由 + Cookie 鉴权 + 表单动作
 │   │   ├── templates/        #   base / login / dashboard / kb_list / kb_detail / prompts / audit_* / error
 │   │   └── static/admin.css
-│   ├── core/                 # config / security(JWT+PBKDF2) / database / deps(RBAC) / errors(统一错误码)
+│   ├── core/                 # config / security(JWT+PBKDF2) / database / deps(RBAC) / errors(统一错误码) / ratelimit(滑动窗口)
 │   ├── api/v1/               # auth · chat · kb · tasks · reports · prompts · audit · agent
-│   ├── models/               # 11 张表 ORM（含 prompt_templates / chat_audit_marks / agent_*）
+│   ├── models/               # 13 张表 ORM（含 prompt_templates / chat_audit_marks / agent_* / patients）
 │   ├── schemas/              # Pydantic DTO
 │   ├── agents/               # ★ 智能体层
 │   │   ├── harness.py        #   ★ 执行循环（≤5 轮 / 逐轮 RoundRecord / 写操作中断）
@@ -504,13 +506,17 @@ followup-agent/
 │   │   ├── rag.py            #   混合检索 + 提示词拼装（提示词由调用方传入）
 │   │   └── guardrails.py     #   输出护栏 + 红旗关键词
 │   └── services/             # knowledge · chat · qa · task · prompt · audit · doc_parser · agent
-├── alembic/                  # env.py（URL 从 Settings 注入）+ versions/0001–0004
+├── alembic/                  # env.py（URL 从 Settings 注入）+ versions/0001–0005
 ├── docs/agent-trajectories.md  # ★ 三条典型轨迹（含 SSE 与审计行示例）
-├── scripts/smoke_test.py     # 端到端冒烟（27 段 81 断言）
+├── docs/repo-map.md          # ★ 仓库地图与汇报口径（文件都是干什么的 / 常见追问怎么答）
+├── docs/go-live-checklist.md # ★ 上线前检查清单（25 项，含当前未达标项）
+├── scripts/smoke_test.py     # 端到端冒烟（30 段 103 断言）
 ├── scripts/create_admin.py   # 管理员引导：本地直连建号/重置密码（幂等）
 ├── scripts/check_llm.py      # ★ Key/模型体检：配置·对话·向量维度，一条命令出结论
 ├── scripts/trajectory_test.py  # ★ 三条轨迹的过程断言（真实模型下自动跳过）
 ├── scripts/reindex_embeddings.py # ★ 换 embedding 后重建切片向量
+├── scripts/cleanup_test_data.py  # ★ 测试账号清理（默认预演，--apply 才删，带管理员护栏）
+├── scripts/archive_audit.py      # ★ 审计冷归档（在线窗口 + sha256 + manifest 留痕）
 ├── docker-compose.yml        # pgvector/pgvector:pg16（5433）
 └── .env.example
 ```

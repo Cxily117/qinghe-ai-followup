@@ -306,7 +306,6 @@ def main() -> int:
         )
 
         print("[15] 引用原文接口（登录可读，仅 published）")
-        chunk_id = after["citations"][0]["chunk_id"]
         detail = c.get(f"/api/v1/kb/documents/{doc['id']}/chunks", headers={"Authorization": f"Bearer {admin}"}).json()
         first_chunk = detail["items"][0]["chunk_id"]
         full = c.get(f"/api/v1/kb/citations/{first_chunk}", headers={"Authorization": f"Bearer {staff}"}).json()
@@ -578,6 +577,26 @@ def main() -> int:
         args_blob = json.dumps(replay.get("tool_calls", []), ensure_ascii=False)
         ok &= check(patient_id not in args_blob, "审计 args_redacted 不含原始住院号（PHI 脱敏生效）")
 
+        # S2：运行记录入库的问题原文也必须脱敏（回放接口不返回 question，直连库校验；
+        # 对远程 base-url 跑冒烟时这段自动跳过，不影响主流程）
+        try:
+            import sqlite3
+            from pathlib import Path
+
+            db_path = Path(__file__).resolve().parent.parent / "dev.db"
+            if db_path.exists():
+                con = sqlite3.connect(db_path)
+                qrow = con.execute(
+                    "SELECT question FROM agent_runs ORDER BY id DESC LIMIT 1"
+                ).fetchone()
+                con.close()
+                ok &= check(
+                    bool(qrow) and patient_id not in qrow[0],
+                    f"agent_runs.question 已脱敏（S2）：{(qrow[0][:36] + '…') if qrow else 'n/a'}",
+                )
+        except Exception as exc:  # noqa: BLE001
+            print(f"  ⚠️ 跳过库内校验：{exc}")
+
         print("[24] 智能体回放越权：他人 run → 404（不暴露存在性）")
         other_run = c.get(f"/api/v1/agent/runs/{run_uid}", headers={"Authorization": f"Bearer {other_token}"})
         ok &= check(other_run.status_code == 404, f"他人回放 → {other_run.status_code}")
@@ -710,6 +729,44 @@ def main() -> int:
             "医护直接调重置接口 → 403（密码未被改动）",
         )
         c.cookies.clear()
+
+        print("[28] 限流：连续失败登录在阈值内被挡住（429 + 中文提示 + Retry-After）")
+        # 带一个假 X-Forwarded-For 绕开「回环豁免」，模拟外网 IP 批量撞库
+        fake_ip = {"X-Forwarded-For": "203.0.113.77"}
+        codes = [
+            c.post(
+                "/api/v1/auth/login",
+                json={"username": "no_such_user", "password": "wrong"},
+                headers=fake_ip,
+            ).status_code
+            for _ in range(21)
+        ]
+        ok &= check(
+            codes[:20] == [401] * 20 and codes[20] == 429,
+            f"前 20 次 401、第 21 次 429（实际 {codes[19]} → {codes[20]}）",
+        )
+        blocked = c.post(
+            "/api/v1/auth/login",
+            json={"username": "no_such_user", "password": "wrong"},
+            headers=fake_ip,
+        )
+        body = blocked.json()
+        ok &= check(
+            bool(
+                body.get("code") == "RATE_LIMITED"
+                and blocked.headers.get("retry-after")
+                and body.get("request_id")
+            ),
+            f"429 走统一 envelope：{body.get('code')} "
+            f"retry={blocked.headers.get('retry-after')}s rid={body.get('request_id')}",
+        )
+        ok &= check(
+            c.post(
+                "/api/v1/auth/login", json={"username": "no_such_user", "password": "wrong"}
+            ).status_code
+            == 401,
+            "回环地址豁免：本机冒烟/调试不被自己的限流挡住",
+        )
 
     print("\n" + ("全部通过 ✅" if ok else "存在失败项 ❌"))
     return 0 if ok else 1

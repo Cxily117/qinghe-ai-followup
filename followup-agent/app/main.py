@@ -23,6 +23,7 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.core.errors import register_exception_handlers
+from app.core.ratelimit import install_rate_limit
 from app.services import patient_service, prompt_service
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,14 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     s = get_settings()
+
+    # 生产环境硬约束：默认密钥、超长令牌有效期这类问题，只有在启动时拦住才有意义。
+    # dev 下只提示不拦，免得本地开发被卡住。
+    if s.is_prod:
+        problems = s.production_problems()
+        if problems:
+            raise RuntimeError("生产环境配置不合格，拒绝启动：\n- " + "\n- ".join(problems))
+
     app = FastAPI(
         title=s.app_name,
         version="0.7.0",
@@ -78,6 +87,8 @@ def create_app() -> FastAPI:
 
     # 统一错误 envelope：{code, message, request_id}（/admin 下的页面错误走 HTML 版）
     register_exception_handlers(app)
+    # 限流：只拦问答/智能体/登录三条花钱或可爆破的路径
+    install_rate_limit(app)
     app.include_router(api_router, prefix=s.api_v1_prefix)
     # 后台页面无 API 前缀：/admin、/admin/kb、/admin/prompts、/admin/audit
     app.include_router(admin_router)
