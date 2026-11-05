@@ -195,6 +195,29 @@ def _admin_error_page(status_code: int, message: str, request_id: str) -> HTMLRe
     return HTMLResponse(content=html, status_code=status_code)
 
 
+# 浏览器直接输错地址（或平台唤醒瞬间打到不存在的路径）时，给人看的引导页，
+# 代替裸的 JSON/“Not Found”。API 与 /admin 仍走 JSON/后台错误页，不受影响。
+_BROWSER_404_HTML = """<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>页面不存在 · 清禾医院随访智能体</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+       background:#0d5a60;font-family:"Microsoft YaHei",system-ui,sans-serif;color:#fff}
+  .card{text-align:center;padding:48px 40px;max-width:420px}
+  h1{font-size:56px;margin:0 0 8px;opacity:.85}
+  p{line-height:1.7;opacity:.9;margin:8px 0 28px}
+  a.btn{display:inline-block;padding:12px 34px;border-radius:24px;background:#fff;
+        color:#0d5a60;text-decoration:none;font-weight:600}
+  .tip{font-size:12px;opacity:.65;margin-top:22px}
+</style></head><body><div class="card">
+  <h1>404</h1>
+  <p>页面不存在或地址不完整。<br>请从完整链接进入，或点击下面按钮回到问答首页。</p>
+  <a class="btn" href="/">返回随访问答</a>
+  <p class="tip">若反复出现，请确认链接带有 ?sharecode= 参数</p>
+</div></body></html>"""
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """在 create_app() 里调用一次。
 
@@ -241,6 +264,13 @@ def register_exception_handlers(app: FastAPI) -> None:
         )[1]
         if _wants_admin_html(request):
             return _admin_error_page(exc.status_code, message, rid)
+        # 浏览器直接访问不存在的页面 → 引导页；API/后台仍走原逻辑
+        if (
+            exc.status_code == 404
+            and not request.url.path.startswith(("/api", "/admin"))
+            and "text/html" in request.headers.get("accept", "")
+        ):
+            return HTMLResponse(content=_BROWSER_404_HTML, status_code=404)
         return JSONResponse(
             status_code=exc.status_code,
             content=_body(code, message, rid),

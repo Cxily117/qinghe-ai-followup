@@ -82,6 +82,11 @@ def create_app() -> FastAPI:
     if WEB_DIR.is_dir():
         app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
 
+        @app.get("/favicon.ico", include_in_schema=False)
+        async def favicon():
+            """浏览器地址栏默认请求的图标，避免每次都打到 404。"""
+            return FileResponse(WEB_DIR / "static" / "icon-192.png")
+
         @app.get("/", include_in_schema=False)
         async def index():
             """医护问答入口。同域托管，前端直接用相对路径调 /api/v1/*。
