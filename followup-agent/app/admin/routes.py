@@ -31,8 +31,15 @@ from app.core.config import get_settings
 from app.core.deps import DbDep
 from app.core.errors import AppError
 from app.core.security import create_access_token, decode_token, verify_password
+from app.models.patient import Patient
 from app.models.user import User
-from app.services import audit_service, knowledge_service, prompt_service, user_service
+from app.services import (
+    audit_service,
+    knowledge_service,
+    patient_service,
+    prompt_service,
+    user_service,
+)
 from app.services.doc_parser import SUPPORTED_EXT, extract_text
 
 logger = logging.getLogger(__name__)
@@ -228,6 +235,89 @@ async def dashboard(request: Request, db: DbDep):
         status_labels=STATUS_LABELS,
         status_class=STATUS_CLASS,
     )
+
+
+# ------------------------------------------------------------------ 患者目录
+
+
+@router.get("/admin/patients", response_class=HTMLResponse)
+async def patients_page(request: Request, db: DbDep):
+    """患者目录：智能体查到的每一个人，都来自这张表。
+
+    这个页面的存在意义不只是"看看数据"：
+      - 演示时对方问"患者哪来的"，直接翻到这一页，指着数据库里的行；
+      - 加一条记录，回问答页问同一个住院号，立刻能查到——证明是查库不是"模型知道"；
+      - 停用某人后，问答端立刻 `found=false`，证明权限与数据是通的。
+    """
+    user, blocked = await _guard(request, db)
+    if blocked:
+        return blocked
+
+    qp = request.query_params
+    page = max(1, int(qp["page"])) if (qp.get("page") or "").isdigit() else 1
+    keyword = qp.get("q") or None
+
+    data = await patient_service.list_page(db, q=keyword, page=page, page_size=20)
+    return _render(
+        request,
+        "patients.html",
+        user=user,
+        nav="patients",
+        data=data,
+        stats=await patient_service.stats(db),
+        keyword=keyword or "",
+    )
+
+
+@router.post("/admin/patients")
+async def patient_create(
+    request: Request,
+    db: DbDep,
+    patient_ref: str = Form(...),
+    name: str = Form(...),
+    dept: str = Form(""),
+    plan_type: str = Form(""),
+    discharge_date: str = Form(""),
+    phone: str = Form(""),
+):
+    """手工录入一名患者：用于演示，也是"数据来自库"最直接的证明。"""
+    operator, blocked = await _guard(request, db)
+    if blocked:
+        return blocked
+    try:
+        patient = await patient_service.create(
+            db,
+            {
+                "patient_ref": patient_ref,
+                "name": name,
+                "dept": dept,
+                "plan_type": plan_type,
+                "discharge_date": discharge_date,
+                "phone": phone,
+            },
+        )
+    except patient_service.PatientInputError as exc:
+        return _back("/admin/patients", err=str(exc))
+    logger.info("管理员 %s 新增患者 %s", operator.username, patient.patient_ref)
+    return _back("/admin/patients", msg=f"已录入患者 {patient.name}（{patient.patient_ref}）")
+
+
+@router.post("/admin/patients/{patient_id}/status")
+async def patient_set_status(
+    request: Request, patient_id: int, db: DbDep, status: str = Form(...)
+):
+    user, blocked = await _guard(request, db)
+    if blocked:
+        return blocked
+    patient = await db.get(Patient, patient_id)
+    if patient is None:
+        return _back("/admin/patients", err="患者不存在，可能已被删除")
+    try:
+        await patient_service.set_status(db, patient, status)
+    except patient_service.PatientInputError as exc:
+        return _back("/admin/patients", err=str(exc))
+    label = "启用" if status == "active" else "停用"
+    return _back("/admin/patients", msg=f"患者 {patient.name} 已{label}")
 
 
 # ------------------------------------------------------------------ 知识库

@@ -65,6 +65,15 @@ _CITATION_RE = re.compile(r"\[(\d{1,2})\]")
 # 否则会把一条有效引用判定成「无引用回答」，白打一个风险标签。
 _SOURCE_MARK_RE = re.compile(r"【资料\s*(\d{1,2})\s*】")
 
+# 模型爱在结尾自己补一段「引用文档来源：- 《某规范》」的列表。
+# 这些文档名是从提示词的资料清单里抄的，编号却常常没有——等于用真名字包装了一个
+# 无法核对的出处。处理办法是：把这段删掉，改用**本次真正检索到的条文编号**由前端渲染
+# 来源卡片。删掉的痕迹记在 flags.source_block_stripped 里，方便质控抽查。
+_SOURCE_BLOCK_RE = re.compile(
+    r"(?P<lead>[\n。；;])[ \t]*(?:引用|参考|资料|文献)?[ \t]*"
+    r"(?:文档|资料|文献)[ \t]*来源[ \t]*[:：][\s\S]*\Z"
+)
+
 
 def extract_citations(answer: str, n_sources: int) -> list[int]:
     """解析回答里实际出现的 [n]，过滤越界编号，去重并升序返回。"""
@@ -156,6 +165,14 @@ def apply_output_guardrails(
     # 先把「【资料2】」这种写法归一化成「[2]」，保证引用识别口径一致
     answer = _SOURCE_MARK_RE.sub(r"[\1]", answer)
 
+    # 再删掉模型自写的「引用文档来源：…」列表（口径见 _SOURCE_BLOCK_RE 注释）。
+    # 只在删完还剩足够正文时才生效，避免把"整段就是一句来源"的短回答删空。
+    trimmed = _SOURCE_BLOCK_RE.sub(r"\g<lead>", answer)
+    if trimmed.strip() and len(trimmed.strip()) >= 40:
+        if trimmed != answer:
+            flags["source_block_stripped"] = True
+        answer = trimmed
+
     if looks_like_refusal(answer):
         # 规则 3 兜底：拒答就不能有引用，否则等于「用资料编号包装了一个编造的答案」
         cleaned = strip_citations(answer)
@@ -197,6 +214,16 @@ def apply_output_guardrails(
     if not citations and len(answer) >= 60:
         flags["uncited_answer"] = True
         flags["suspected_general_knowledge"] = True
+        # 模型没写编号，但检索确实命中了条文：不替它下结论，只把「可以对照哪几条」
+        # 挂上去（前端据此渲染来源卡片）。这比显示模型自己写的文档名更可核对。
+        if n_sources:
+            citations = list(range(1, min(n_sources, 2) + 1))
+            flags["citations_attached"] = True
+            # 给了来源卡片，就要说清"这不是逐句引用"——否则读者会以为每条都能对上号
+            answer = (
+                answer.rstrip()
+                + "\n\n（本条回答未逐句标注条文编号，以上为相关条文摘要，请对照下方来源核对。）"
+            )
 
     if contains_medical_advice(answer):
         flags["medical_advice_suspected"] = True

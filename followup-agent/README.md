@@ -106,6 +106,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 | `GET /admin/audit` | 对话审计 | 医护、时间段、仅疑似、仅已标记筛选 + 风险标签 |
 | `GET /admin/audit/{session_id}` | 会话详情 | 逐条问答 + flags + 引用来源 + 右侧标记面板（留操作人痕迹） |
 | `GET /admin/users` | 用户与授权 | 全部账号一览（角色/科室/状态/注册时间）；授予或回收管理员、启用或停用 |
+| `GET /admin/patients` | 患者目录 | `patients` 表的读口：在册患者 / 来源（演示·手工·HIS）/ 搜索 / 手工录入 / 停用 |
 
 访问控制：Cookie 里的 JWT 校验 `role=admin`；staff 携带有效 token 访问页面 → 403 页并引导至问答端。
 接口层同样由 `require_admin` 兜底，**页面和接口是两道独立闸门**，任何一道都不依赖前端隐藏按钮。
@@ -128,6 +129,21 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
   已知取舍：JWT 无状态，改密不会让已签发 token 立刻失效（最长 12 小时自然过期），
   要"改密即踢下线"需引入 token 版本号，属后续加固项。
 - 表结构沿用 `users.role / users.status`，无迁移。
+
+### 患者目录（`patients` 表）
+
+患者不再写死在 `app/agents/data/patients.json` 里，而是落成一张表（迁移 `0005`）：
+
+- **字段**：住院号（唯一）/ 姓名 / 科室 / 随访方案 / 出院日 / 电话 / 状态 / 来源 / 备注；
+- **来源标记**：`seed`（仓库自带演示数据，非真实患者）· `manual`（后台手工录入）· `his`（预留，接院内同步时写入）；
+- **播种**：启动时 `patient_service.ensure_seed()` 按住院号幂等补齐演示患者，改数据不用改代码；
+- **查询语义**：`resolve_patient` 先按住院号、再按姓名，**唯一命中**才返回；
+  查不到或同名多人 → `found=false` + 候选，让模型回来问人，不许猜；
+- **停用即不命中**：`status=inactive` 的患者不参与匹配，等于"这个人不该再被随访"；
+- **接真实数据**：把播种换成 HIS/EMPI 同步任务即可，工具、提示词、护栏都不用改。
+
+演示与验收文档：`docs/demo-script.md`（怎么问、怎么讲）、`docs/mvp-evidence.md`（怎么证明）。
+清理测试账号与空会话：`python scripts/cleanup_test_data.py`（默认预演，加 `--apply` 才删）。
 
 ## 接口清单
 
@@ -261,7 +277,7 @@ Harness 看到 `pending_confirm` 立刻停止循环，把草稿内容以 `confir
 
 | 工具 | 类别 | 说明 |
 |---|---|---|
-| `resolve_patient` | 读 | 住院号/姓名 → 患者档案（mock 患者库） |
+| `resolve_patient` | 读 | 住院号/姓名 → 患者档案（查 `patients` 表，唯一命中才返回，查不到 found=false） |
 | `search_policy` | 读 | 制度检索（允许模型改写 query 重查，单轮最多 3 次） |
 | `list_existing_tasks` | 读 | 查该患者已有随访任务，防重复建 |
 | `assess_red_flag` | 读 | 红旗症状判定（P3 接升级链路） |

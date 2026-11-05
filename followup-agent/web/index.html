@@ -8,7 +8,7 @@
 <link rel="icon" type="image/png" href="/static/icon-192.png">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
 <link rel="manifest" href="/static/manifest.json">
-<link rel="stylesheet" href="/static/style.css?v=p6">
+<link rel="stylesheet" href="/static/style.css?v=p7">
 </head>
 <body>
 
@@ -113,10 +113,15 @@
         <div class="empty" id="empty-state">
           <h2>可以问我随访制度里的事</h2>
           <p>回答只依据已发布的制度条文，并标注出处；超出制度范围会直接说明。</p>
-          <div class="chips">
-            <button class="chip" type="button">骨科术后需要随访几次？分别在什么时候？</button>
-            <button class="chip" type="button">患者发烧到 39 度该怎么处理？</button>
-            <button class="chip" type="button">随访完成率是怎么算的？</button>
+          <div class="chips" data-mode="qa">
+            <button class="chip" type="button">关节置换术后随访，制度要求哪些节点？</button>
+            <button class="chip" type="button">骨科术后第 7 天随访，要评估哪些内容？</button>
+            <button class="chip" type="button">儿科哮喘出院后随访怎么做？</button>
+          </div>
+          <div class="chips" data-mode="agent" hidden>
+            <button class="chip" type="button">住院号 ZY2026001 这位患者，出院多少天了？</button>
+            <button class="chip" type="button">帮我给 ZY2026001 新建随访：第 7 天电话、第 30 天门诊复查。</button>
+            <button class="chip" type="button">ZY9999999 这位患者什么时候随访？</button>
           </div>
         </div>
       </div>
@@ -170,6 +175,6 @@
   </div>
 </div>
 
-<script src="/static/app.js?v=p7"></script>
+<script src="/static/app.js?v=p8"></script>
 </body>
 </html>

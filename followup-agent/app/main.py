@@ -23,7 +23,7 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.core.errors import register_exception_handlers
-from app.services import prompt_service
+from app.services import patient_service, prompt_service
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +56,11 @@ async def lifespan(app: FastAPI):
     try:
         async with SessionLocal() as db:
             await prompt_service.ensure_seed(db)
+            # 患者目录一起播种（幂等）：演示患者属于「数据」，不该写死在代码里。
+            # 接真实 HIS/EMPI 时把这一步换成同步任务即可，表结构和上层代码都不用动。
+            await patient_service.ensure_seed(db)
     except Exception:  # noqa: BLE001 —— 迁移没跑/库连不上时不该让服务起不来
-        logger.warning("提示词种子初始化失败（可能尚未执行 alembic upgrade head）", exc_info=True)
+        logger.warning("提示词/患者种子初始化失败（可能尚未执行 alembic upgrade head）", exc_info=True)
     yield
 
 

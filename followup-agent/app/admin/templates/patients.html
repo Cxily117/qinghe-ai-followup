@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}患者目录{% endblock %}
+{% block sub %}智能体查到的每一位患者都来自这张表（patients）；查不到就是 found=false，不会替模型猜{% endblock %}
+
+{% block body %}
+<div class="grid grid-4" style="margin-bottom:16px">
+  <div class="kpi">
+    <div class="kpi-label">在册患者</div>
+    <div class="kpi-value">{{ stats.total }}</div>
+    <div class="kpi-foot">active + 已停用</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">演示数据（种子）</div>
+    <div class="kpi-value">{{ stats.seeded }}</div>
+    <div class="kpi-foot">来自 patients.json，非真实患者</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">手工录入</div>
+    <div class="kpi-value">{{ stats.manual }}</div>
+    <div class="kpi-foot">管理员在本页新增</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">当前页</div>
+    <div class="kpi-value">{{ data['items']|length }}</div>
+    <div class="kpi-foot">共 {{ data.pages }} 页</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2 class="card-title">新增患者</h2>
+      <p class="card-hint">录完回问答页用住院号提问，能查到就说明回答来自数据库，而不是模型自己编的</p>
+    </div>
+  </div>
+  <form method="post" action="/admin/patients">
+    <div class="row">
+      <div class="field" style="width:150px">
+        <label for="patient_ref">住院号 *</label>
+        <input class="input" id="patient_ref" name="patient_ref" required maxlength="64"
+               placeholder="如 ZY2026005">
+      </div>
+      <div class="field" style="width:130px">
+        <label for="name">姓名 *</label>
+        <input class="input" id="name" name="name" required maxlength="64" placeholder="如 赵明">
+      </div>
+      <div class="field" style="width:140px">
+        <label for="dept">科室</label>
+        <input class="input" id="dept" name="dept" maxlength="64" placeholder="如 骨科">
+      </div>
+      <div class="field grow">
+        <label for="plan_type">随访方案 / 病种</label>
+        <input class="input" id="plan_type" name="plan_type" maxlength="64"
+               placeholder="如 髋关节置换术后随访（要与制度里的病种名一致）">
+      </div>
+      <div class="field" style="width:150px">
+        <label for="discharge_date">出院日期</label>
+        <input class="input" id="discharge_date" name="discharge_date" type="date">
+      </div>
+      <div class="field" style="width:130px">
+        <label for="phone">联系电话</label>
+        <input class="input" id="phone" name="phone" maxlength="32" placeholder="可选">
+      </div>
+      <div class="field">
+        <button class="btn btn-primary" type="submit">录入</button>
+      </div>
+    </div>
+    <div class="hint">
+      「随访方案」决定规则引擎用哪套节点要求，务必与知识库里已发布制度中的病种名称对齐；
+      电话只用于服务端核对，问答与页面一律掩码显示。
+    </div>
+  </form>
+</div>
+
+<form class="filters" method="get" action="/admin/patients">
+  <div class="field grow">
+    <label>搜索</label>
+    <input class="input" name="q" value="{{ keyword }}" placeholder="住院号 / 姓名 / 科室">
+  </div>
+  <div class="field">
+    <button class="btn" type="submit">筛选</button>
+  </div>
+  <div class="field">
+    <a class="btn btn-ghost" href="/admin/patients">重置</a>
+  </div>
+</form>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>住院号</th><th>姓名</th><th>科室</th><th>随访方案</th>
+          <th>出院日</th><th>状态</th><th>来源</th><th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for p in data['items'] %}
+        <tr>
+          <td class="mono">{{ p.patient_ref }}</td>
+          <td>{{ p.name }}</td>
+          <td>{{ p.dept or '—' }}</td>
+          <td>{{ p.plan_type or '—' }}</td>
+          <td class="mono" style="font-size:12px">
+            {{ p.discharge_date.strftime('%Y-%m-%d') if p.discharge_date else '—' }}
+          </td>
+          <td>
+            {% if p.status == 'active' %}
+              <span class="pill ok">在册</span>
+            {% else %}
+              <span class="pill muted">停用</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if p.source == 'seed' %}
+              <span class="pill warn">演示</span>
+            {% elif p.source == 'his' %}
+              <span class="pill info">HIS</span>
+            {% else %}
+              <span class="pill muted">手工</span>
+            {% endif %}
+          </td>
+          <td>
+            <form class="inline-form" method="post" action="/admin/patients/{{ p.id }}/status">
+              {% if p.status == 'active' %}
+              <button class="btn btn-sm btn-ghost" type="submit" name="status" value="inactive">停用</button>
+              {% else %}
+              <button class="btn btn-sm" type="submit" name="status" value="active">启用</button>
+              {% endif %}
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="empty">
+          患者目录为空。启动时会自动从 <code>app/agents/data/patients.json</code> 播种演示数据，
+          也可以直接用上面的表单录入。
+        </td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if data.pages > 1 %}
+  <div class="pager">
+    <span>共 {{ data.total }} 条</span>
+    {% if data.page > 1 %}
+      <a href="/admin/patients?page={{ data.page - 1 }}{% if keyword %}&q={{ keyword }}{% endif %}">上一页</a>
+    {% endif %}
+    <span class="cur">{{ data.page }} / {{ data.pages }}</span>
+    {% if data.page < data.pages %}
+      <a href="/admin/patients?page={{ data.page + 1 }}{% if keyword %}&q={{ keyword }}{% endif %}">下一页</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2 class="card-title">这张表和智能体的关系</h2>
+      <p class="card-hint">问答链路里，<span class="mono">resolve_patient</span> 工具就是查这张表</p>
+    </div>
+  </div>
+  <div style="font-size:13px;color:var(--ink-2);line-height:1.85">
+    1. 医护在问答页说「张伟 髋关节术后 该随访几次」→ 模型调用 <span class="mono">resolve_patient</span>；<br>
+    2. 工具用住院号或姓名 <b>精确匹配</b> 本表，唯一命中才返回患者上下文（科室、方案、出院日、术后天数）；<br>
+    3. 命中多位同名或查不到 → 返回 <span class="mono">found=false</span> + 候选，模型只能回来问人，不许猜；<br>
+    4. 停用的患者不参与匹配，相当于「这个人不该再被随访」。
+  </div>
+</div>
+{% endblock %}

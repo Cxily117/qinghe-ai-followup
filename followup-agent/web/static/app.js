@@ -641,6 +641,10 @@
   messagesEl.addEventListener("click", (e) => {
     const chip = e.target.closest(".chip");
     if (chip) {
+      // 示例问题自带模式：点"查患者"的例子却停在标准问答，必然答非所问
+      const group = chip.closest(".chips");
+      const want = group && group.dataset.mode;
+      if (want && want !== state.mode) setMode(want);
       send(chip.textContent);
       return;
     }
@@ -838,12 +842,22 @@
     modeSeg.addEventListener("click", (e) => {
       const btn = e.target.closest(".seg-btn");
       if (!btn || state.busy) return;
-      state.mode = btn.dataset.mode === "agent" ? "agent" : "qa";
+      setMode(btn.dataset.mode);
+      input.focus();
+    });
+  }
+
+  /** 切换问答 / 智能体：按钮状态、提示语、示例问题三处必须一起变。 */
+  function setMode(mode) {
+    state.mode = mode === "agent" ? "agent" : "qa";
+    if (modeSeg) {
       modeSeg.querySelectorAll(".seg-btn").forEach((b) => {
         b.classList.toggle("active", b.dataset.mode === state.mode);
       });
-      if (modeHint) modeHint.textContent = MODE_HINT[state.mode];
-      input.focus();
+    }
+    if (modeHint) modeHint.textContent = MODE_HINT[state.mode];
+    document.querySelectorAll("#empty-state .chips").forEach((g) => {
+      g.hidden = g.dataset.mode !== state.mode;
     });
   }
 

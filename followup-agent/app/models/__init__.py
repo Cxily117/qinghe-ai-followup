@@ -4,6 +4,7 @@ from app.models.audit import ChatAuditMark
 from app.models.base import Base
 from app.models.chat import ChatSession, Message
 from app.models.kb import KbChunk, KbDocument
+from app.models.patient import Patient
 from app.models.prompt import PromptTemplate
 from app.models.task import FollowupTaskDraft
 from app.models.user import User
@@ -15,6 +16,7 @@ __all__ = [
     "Message",
     "KbDocument",
     "KbChunk",
+    "Patient",
     "FollowupTaskDraft",
     "PromptTemplate",
     "ChatAuditMark",

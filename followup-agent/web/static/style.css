@@ -492,6 +492,9 @@ sup.cite:hover { background: #d3ebe6; }
 .empty h2 { font-size: 17px; font-weight: 500; margin: 0 0 6px; }
 .empty p { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
 .chips { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+/* flex 的 display 会盖掉 [hidden]，必须显式声明：
+   两种模式各有一组示例问题，只显示当前模式那一组 */
+.chips[hidden] { display: none; }
 .chip {
   border: 1px solid var(--line);
   background: var(--panel);

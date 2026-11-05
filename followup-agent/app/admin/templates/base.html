@@ -15,6 +15,7 @@
     </div>
     <nav class="nav">
       <a class="nav-item {{ 'is-on' if nav == 'dashboard' }}" href="/admin"><span class="dot"></span>概览</a>
+      <a class="nav-item {{ 'is-on' if nav == 'patients' }}" href="/admin/patients"><span class="dot"></span>患者目录</a>
       <a class="nav-item {{ 'is-on' if nav == 'kb' }}" href="/admin/kb"><span class="dot"></span>随访知识库</a>
       <a class="nav-item {{ 'is-on' if nav == 'prompts' }}" href="/admin/prompts"><span class="dot"></span>提示词模板</a>
       <a class="nav-item {{ 'is-on' if nav == 'audit' }}" href="/admin/audit"><span class="dot"></span>对话审计</a>

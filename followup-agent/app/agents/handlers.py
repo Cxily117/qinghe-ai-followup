@@ -11,10 +11,8 @@
 """
 from __future__ import annotations
 
-import json
+import logging
 from datetime import date, datetime
-from functools import lru_cache
-from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,22 +27,59 @@ from app.agents.runtime import (
 )
 from app.core.errors import AppError
 from app.models.task import FollowupTaskDraft
-from app.services import task_service
+from app.services import patient_service, task_service
 
-DATA_DIR = Path(__file__).parent / "data"
+logger = logging.getLogger(__name__)
 
 
-@lru_cache(maxsize=1)
-def _patients() -> list[dict]:
-    """演示用患者目录（模拟 EMPI）。
+async def resolve_patient(state: RunState, args: dict, db: AsyncSession) -> dict:
+    """按住院号/姓名查患者目录（数据库表，不是 JSON 文件）。
 
-    真实部署时这里换成院内集成平台查询；保持"查不到就 found=false"的语义不变即可，
-    上层（模型/提示词/校验）完全不用改。
+    查到就把患者上下文写进本轮 state（后续工具都用它）；查不到就 found=false，
+    绝不替模型挑一个"最像的"——张冠李戴会让所有随访节点挂到错误的人身上。
     """
-    path = DATA_DIR / "patients.json"
-    if not path.exists():
-        return []
-    return json.loads(path.read_text(encoding="utf-8"))
+    ref = (args.get("patient_ref") or "").strip()
+    if not ref:
+        return {"found": False, "reason": "没有提供患者标识", "hint": "请向医护询问住院号或门诊号"}
+
+    try:
+        hit, candidates = await patient_service.find_exact(db, ref)
+    except Exception:  # noqa: BLE001 —— 迁移没跑/库连不上时，不能让整轮问答崩掉
+        logger.warning("患者目录查询失败", exc_info=True)
+        return {
+            "found": False,
+            "reason": "患者目录暂时不可用",
+            "hint": "请重启服务确认已执行 alembic upgrade head；此时不得编造患者信息",
+        }
+
+    if hit is None:
+        return {
+            "found": False,
+            "reason": "未找到唯一匹配的患者" if not candidates else "匹配到多位同名患者",
+            "candidates": [mask_name(p.name) for p in candidates][:5],
+            "hint": "请向医护核对住院号，不要猜测",
+        }
+
+    state.patient_id = hit.patient_ref
+    state.patient_label = f"{mask_name(hit.name)}（{hit.dept}）"
+    state.plan_type = hit.plan_type or ""
+    state.discharge_date = hit.discharge_date.isoformat() if hit.discharge_date else ""
+    today = date.today()
+    days = None
+    if hit.discharge_date:
+        state.flags.add("has_base_date")
+        days = (today - hit.discharge_date).days
+
+    return {
+        "found": True,
+        "patient_id": hit.patient_ref,  # 返回原文给服务端用；展示给模型的是掩码版
+        "patient_display": state.patient_label,
+        "dept": hit.dept,
+        "plan_type": hit.plan_type or "",
+        "discharge_date": state.discharge_date,
+        "post_op_days": days,
+        "note": "住院号为院内标识，回答中只可使用掩码形式",
+    }
 
 
 def mask_name(name: str) -> str:
@@ -66,48 +101,6 @@ def redact_arg(value: str) -> str:
     if len(value) <= 2:
         return "*" * len(value)
     return value[:1] + "*" * (len(value) - 2) + value[-1:]
-
-
-async def resolve_patient(state: RunState, args: dict, db: AsyncSession) -> dict:
-    ref = (args.get("patient_ref") or "").strip()
-    if not ref:
-        return {"found": False, "reason": "没有提供患者标识", "hint": "请向医护询问住院号或门诊号"}
-
-    rows = _patients()
-    hit = [p for p in rows if p["ref"].upper() == ref.upper()]
-    if not hit:  # 退一步按姓名精确匹配，仍然要求唯一
-        hit = [p for p in rows if p["name"] == ref]
-    if len(hit) != 1:
-        return {
-            "found": False,
-            "reason": "未找到唯一匹配的患者" if not hit else "匹配到多位同名患者",
-            "candidates": [mask_name(p["name"]) for p in hit][:5],
-            "hint": "请向医护核对住院号，不要猜测",
-        }
-
-    p = hit[0]
-    state.patient_id = p["ref"]
-    state.patient_label = f"{mask_name(p['name'])}（{p['dept']}）"
-    state.plan_type = p.get("plan_type", "")
-    state.discharge_date = p.get("discharge_date", "")
-    today = date.today()
-    try:
-        base = datetime.strptime(p["discharge_date"], "%Y-%m-%d").date()
-        state.flags.add("has_base_date")
-        days = (today - base).days
-    except Exception:
-        base, days = None, None
-
-    return {
-        "found": True,
-        "patient_id": p["ref"],  # 返回原文给服务端用；展示给模型的是掩码版
-        "patient_display": f"{mask_name(p['name'])}（{p['dept']}）",
-        "dept": p["dept"],
-        "plan_type": p.get("plan_type", ""),
-        "discharge_date": p.get("discharge_date", ""),
-        "post_op_days": days,
-        "note": "住院号为院内标识，回答中只可使用掩码形式",
-    }
 
 
 def _register_hits(state: RunState, hits: list) -> list[dict]:

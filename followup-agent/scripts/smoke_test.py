@@ -461,9 +461,77 @@ def main() -> int:
         )
         c.cookies.clear()
 
-        # ---------------- 阶段 4：自主智能体（P1：只读链路 + 审计 + 回放） ----------------
+        print("[21c] 患者目录：页面可访问 / 表单可录入 / 唯一约束 / 停用即不命中")
+        c.cookies.set("qh_admin", admin)
+        page = c.get("/admin/patients")
+        ok &= check(page.status_code == 200, f"GET /admin/patients → {page.status_code}")
+        ok &= check("ZY2026001" in page.text, "页面能列出启动时播种的演示患者（ZY2026001）")
+
+        smoke_ref = f"SMK{suffix.upper()}"
+        created = c.post(
+            "/admin/patients",
+            data={
+                "patient_ref": smoke_ref,
+                "name": f"冒烟患者{suffix}",
+                "dept": "骨科",
+                "plan_type": "髋关节置换术后随访",
+                "discharge_date": "2026-10-28",
+            },
+        )
+        ok &= check(
+            created.status_code == 303 and "已录入" in _loc(created),
+            f"表单录入患者 → {_loc(created)[:40]}",
+        )
+        dup = c.post(
+            "/admin/patients",
+            data={"patient_ref": smoke_ref, "name": "重复住院号"},
+        )
+        ok &= check(
+            dup.status_code == 303 and "已存在" in _loc(dup),
+            "住院号唯一：重复录入被拒（防止同名不同人张冠李戴）",
+        )
+
+        from app.services import patient_service
+
+        async def _resolve(ref: str) -> str | None:
+            """直接调 resolve_patient 背后的查询，验证「停用即不命中」的语义。"""
+            from app.core.database import SessionLocal as _SL
+
+            async with _SL() as db:
+                hit, _cands = await patient_service.find_exact(db, ref)
+                return hit.patient_ref if hit else None
+
+        ok &= check(asyncio.run(_resolve(smoke_ref)) == smoke_ref, "在册患者可被查患者工具命中")
+        ok &= check(asyncio.run(_resolve("ZY0000000")) is None, "不存在的住院号 → 查不到（found=false）")
+
+        # 停用后必须查不到：这是「这个人不该再被随访」的落地，而不是只在页面上变灰
+        victim = c.get(f"/admin/patients?q={smoke_ref}").text
+        import re as _re
+
+        m = _re.search(r'/admin/patients/(\d+)/status', victim)
+        if m:
+            off = c.post(f"/admin/patients/{m.group(1)}/status", data={"status": "inactive"})
+            ok &= check(off.status_code == 303, "停用患者 → 303")
+            ok &= check(asyncio.run(_resolve(smoke_ref)) is None, "停用后查患者工具不再命中")
+        else:
+            ok &= check(False, "未能从页面解析出患者 id（停用链路未验证）")
+        c.cookies.clear()
+
+        async def _cleanup_patient() -> None:
+            from sqlalchemy import delete as _delete
+
+            from app.core.database import SessionLocal as _SL
+            from app.models.patient import Patient as _P
+
+            async with _SL() as db:
+                await db.execute(_delete(_P).where(_P.patient_ref == smoke_ref))
+                await db.commit()
+
+        asyncio.run(_cleanup_patient())
+
+
         print("[22] 智能体 SSE：事件完整、delta 只发一次（护栏改写走 replace，不得叠加）")
-        patient_id = "ZY2026001"  # mock 患者库中的真实患者
+        patient_id = "ZY2026001"  # 患者目录（patients 表）里的演示患者，由启动播种写入
         agent_events: list[dict] = []
         with c.stream(
             "POST",
