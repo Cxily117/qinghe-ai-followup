@@ -1,209 +1,34 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<html lang="zh-CN"><head><meta charset="utf-8">
 <title>清禾综合医院 · 门诊后随访现状流程图</title>
 <style>
-  :root{
-    --bg:#F7F8FA; --card:#FFFFFF; --border:#E3E6EA; --bord2:#CFD4DA;
-    --t1:#1F2329; --t2:#6B7280; --t3:#9AA1AC;
-    --his:#2563EB; --nurse:#B45309; --doc:#6D28D9; --ps:#0F766E; --qa:#C0392B;
-    --c-time:#FEF3C7; --c-time-t:#92400E;
-    --c-hum:#DBEAFE; --c-hum-t:#1E40AF;
-    --c-priv:#FDE2E2; --c-priv-t:#B91C1C;
-    --c-brk:#FFE4CC; --c-brk-t:#9A3412;
-  }
-  *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--t1);font-family:-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,sans-serif;line-height:1.6;}
-  .wrap{max-width:920px;margin:0 auto;padding:32px 20px 64px;}
-  h1{font-size:22px;font-weight:600;margin:0 0 4px;}
-  .sub{color:var(--t2);font-size:13px;margin:0 0 24px;}
-  .legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--t2);margin-bottom:8px;}
-  .legend b{color:var(--t1);font-weight:600;margin-right:4px;}
-  .lg{display:flex;align-items:center;gap:5px;}
-  .dot{width:9px;height:9px;border-radius:2px;display:inline-block;}
-  .chips{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--t2);align-items:center;margin:4px 0 28px;}
-  .ch{font-size:11px;padding:1px 8px;border-radius:10px;line-height:1.7;}
-  .w{background:var(--c-time);color:var(--c-time-t);}
-  .i{background:var(--c-hum);color:var(--c-hum-t);}
-  .d{background:var(--c-priv);color:var(--c-priv-t);}
-  .b{background:var(--c-brk);color:var(--c-brk-t);}
-  /* flow */
-  .step{display:flex;gap:14px;}
-  .rail{flex:0 0 30px;position:relative;}
-  .num{width:30px;height:30px;border-radius:50%;background:var(--card);border:1px solid var(--bord2);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--t2);position:relative;z-index:1;}
-  .line{position:absolute;left:14.5px;top:36px;bottom:-2px;width:1px;background:var(--border);}
-  .card{flex:1;min-width:0;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--nurse);border-radius:8px;padding:12px 14px;margin-bottom:12px;}
-  .card .top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}
-  .card .title{font-size:14px;font-weight:600;}
-  .lane{font-size:11px;white-space:nowrap;}
-  .desc{font-size:13px;color:var(--t2);margin-top:3px;}
-  .tagrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
-  .his{border-left-color:var(--his);} .nurse{border-left-color:var(--nurse);}
-  .doc{border-left-color:var(--doc);} .ps{border-left-color:var(--ps);} .qa{border-left-color:var(--qa);}
-  .l-his{color:var(--his);} .l-nurse{color:var(--nurse);} .l-doc{color:var(--doc);} .l-ps{color:var(--ps);} .l-qa{color:var(--qa);}
-  section{margin-top:48px;}
-  h2{font-size:17px;font-weight:600;border-bottom:2px solid var(--border);padding-bottom:8px;margin:0 0 20px;}
-  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px;}
-  .m{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px;}
-  .m .l{font-size:12px;color:var(--t2);}
-  .m .v{font-size:26px;font-weight:600;line-height:1.3;margin-top:2px;}
-  .m .s{font-size:11px;color:var(--t3);margin-top:4px;}
-  table{width:100%;border-collapse:collapse;font-size:13px;background:var(--card);}
-  th,td{border:1px solid var(--border);padding:9px 11px;text-align:left;vertical-align:top;}
-  th{background:#EEF1F4;font-weight:600;color:var(--t1);}
-  td.ref{color:var(--t3);white-space:nowrap;font-size:12px;}
-  .note{font-size:12px;color:var(--t3);margin-top:10px;line-height:1.6;}
-  .twocol{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;}
-  .col{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;}
-  .col h3{font-size:15px;margin:0 0 4px;}
-  .col .cs{font-size:12px;color:var(--t2);margin-bottom:14px;}
-  .item{display:flex;gap:10px;margin-bottom:13px;}
-  .ib{flex:0 0 22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;}
-  .ib-h{background:var(--c-hum);color:var(--c-hum-t);}
-  .ib-p{background:var(--c-priv);color:var(--c-priv-t);}
-  .item .it{font-size:13px;font-weight:600;}
-  .item .id{font-size:12px;color:var(--t2);margin-top:1px;}
-  .footer{margin-top:40px;font-size:12px;color:var(--t3);border-top:1px solid var(--border);padding-top:14px;}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <h1>清禾综合医院 · 门诊后随访现状流程图</h1>
-  <p class="sub">数据来源：业务需求发现报告（合成访谈，35/36 覆盖）。说明：访谈仅含患者服务经理直接陈述，量化多为推算，属待验证假设。</p>
+  body{font-family:"Microsoft YaHei","PingFang SC",sans-serif;background:#fff;margin:0;padding:28px 34px;color:#222;}
+  h1{font-size:21px;margin:0 0 6px;} .sub{font-size:12.5px;color:#666;margin:0 0 14px;line-height:1.7;}
+  .legend{display:flex;gap:22px;align-items:center;margin:0 0 10px;font-size:12.5px;color:#444;flex-wrap:wrap;}
+  .lg{display:inline-flex;align-items:center;gap:6px;}
+  .tbl-wrap{margin-top:18px;} h2{font-size:15px;margin:0 0 8px;}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;}
+  th,td{border:1px solid #D8D8D8;padding:6px 9px;text-align:left;vertical-align:top;}
+  th{background:#F2F2F2;} .pid{font-weight:700;color:#B03A32;white-space:nowrap;}
+  .note{font-size:11.5px;color:#777;margin:8px 0 0;line-height:1.7;}
+  svg.main{display:block;margin:0 auto;}
+  .t{font-size:14px;font-weight:600;fill:#222;} .ts{font-size:12.5px;font-weight:600;fill:#8C2F2F;}
+  .tl{font-size:12.5px;font-weight:700;fill:#444;}
+  .pt{font-size:13px;font-weight:700;fill:#A93028;} .pb{font-size:11.5px;fill:#8C4A45;}
+</style></head><body>
+<h1>清禾综合医院 · 门诊后随访现状流程图</h1>
+<p class="sub">数据来源：业务需求发现访谈报告 REPORT-46ba5539（合成访谈，待验证假设）。图形记号：圆角框＝起止、矩形＝流程（处理）、菱形＝判断。</p>
 
-  <div class="legend"><b>泳道</b>
-    <span class="lg"><span class="dot" style="background:var(--his)"></span>系统 · HIS</span>
-    <span class="lg"><span class="dot" style="background:var(--nurse)"></span>护士 · 护理部</span>
-    <span class="lg"><span class="dot" style="background:var(--doc)"></span>专科医生</span>
-    <span class="lg"><span class="dot" style="background:var(--ps)"></span>患者服务</span>
-    <span class="lg"><span class="dot" style="background:var(--qa)"></span>隐私 · 质控</span>
-  </div>
-  <div class="chips"><b style="color:var(--t1);font-weight:600;">标记</b>
-    <span class="ch w">耗时</span><span class="ch w">成本</span><span class="ch i">人工审核</span><span class="ch d">隐私点</span><span class="ch b">断点</span>
-  </div>
-
-  <div class="flow">
-    <div class="step"><div class="rail"><div class="num">1</div><div class="line"></div></div>
-      <div class="card his"><div class="top"><span class="title">HIS 生成出院名单</span><span class="lane l-his">系统 · HIS</span></div>
-      <div class="desc">每月约 1200 名出院患者进入 7 天随访窗口 [f00]</div></div></div>
-
-    <div class="step"><div class="rail"><div class="num">2</div><div class="line"></div></div>
-      <div class="card nurse"><div class="top"><span class="title">名单导出到表格</span><span class="lane l-nurse">护士 · 护理部</span></div>
-      <div class="desc">无统一访谈 ID，重复记录靠住院号加出院时间人工辨认 [f30]</div>
-      <div class="tagrow"><span class="ch w">耗时</span><span class="ch b">断点</span></div></div></div>
-
-    <div class="step"><div class="rail"><div class="num">3</div><div class="line"></div></div>
-      <div class="card nurse"><div class="top"><span class="title">护士手工分组排程</span><span class="lane l-nurse">护士 · 护理部</span></div>
-      <div class="desc">按术式、出院日、优先级人工分批，决定谁先打 [f01]</div>
-      <div class="tagrow"><span class="ch w">耗时</span><span class="ch w">成本</span></div></div></div>
-
-    <div class="step"><div class="rail"><div class="num">4</div><div class="line"></div></div>
-      <div class="card nurse"><div class="top"><span class="title">核对联系人与授权</span><span class="lane l-nurse">护士 · 护理部</span></div>
-      <div class="desc">名单含家属号码，身份与授权状态缺失时靠人判断 [f31][f33]</div>
-      <div class="tagrow"><span class="ch w">耗时</span><span class="ch i">人工审核</span><span class="ch d">隐私点</span></div></div></div>
-
-    <div class="step"><div class="rail"><div class="num">5</div><div class="line"></div></div>
-      <div class="card nurse"><div class="top"><span class="title">逐个拨号触达</span><span class="lane l-nurse">护士 · 护理部</span></div>
-      <div class="desc">号码失效、患者在上班、方言不通；三次未接即搁置 [f10]</div>
-      <div class="tagrow"><span class="ch w">耗时</span><span class="ch w">成本</span><span class="ch b">断点</span></div></div></div>
-
-    <div class="step"><div class="rail"><div class="num">6</div><div class="line"></div></div>
-      <div class="card nurse"><div class="top"><span class="title">按术式问卷问诊</span><span class="lane l-nurse">护士 · 护理部</span></div>
-      <div class="desc">不同术式问卷不同，模板须专科审核后才能发布 [f21]</div>
-      <div class="tagrow"><span class="ch i">人工审核</span></div></div></div>
-
-    <div class="step"><div class="rail"><div class="num">7</div><div class="line"></div></div>
-      <div class="card qa"><div class="top"><span class="title">红旗识别与升级</span><span class="lane l-qa">护士 · 隐私质控</span></div>
-      <div class="desc">呼吸困难等信号须立即停止问卷、按院流程升级 [f11][f42]</div>
-      <div class="tagrow"><span class="ch i">人工审核</span><span class="ch d">隐私点</span><span class="ch b">断点</span></div></div></div>
-
-    <div class="step"><div class="rail"><div class="num">8</div><div class="line"></div></div>
-      <div class="card nurse"><div class="top"><span class="title">填写随访记录</span><span class="lane l-nurse">护士 · 护理部</span></div>
-      <div class="desc">单次 12 分钟，其中 4 分钟是跨系统重复填写 [f12]</div>
-      <div class="tagrow"><span class="ch w">耗时</span><span class="ch w">成本</span></div></div></div>
-
-    <div class="step"><div class="rail"><div class="num">9</div><div class="line"></div></div>
-      <div class="card qa"><div class="top"><span class="title">群聊与个人表补录</span><span class="lane l-qa">护士 → 专科</span></div>
-      <div class="desc">异常原因先落在群聊或个人表，再回系统补录一次 [f14]</div>
-      <div class="tagrow"><span class="ch w">耗时</span><span class="ch d">隐私点</span><span class="ch b">断点</span></div></div></div>
-
-    <div class="step"><div class="rail"><div class="num">10</div><div class="line"></div></div>
-      <div class="card doc"><div class="top"><span class="title">转交专科</span><span class="lane l-doc">护士 → 专科</span></div>
-      <div class="desc">发消息发名单，常不带业务编号与资料版本 [f01][f23]</div>
-      <div class="tagrow"><span class="ch w">耗时</span><span class="ch b">断点</span></div></div></div>
-
-    <div class="step"><div class="rail"><div class="num">11</div><div class="line"></div></div>
-      <div class="card doc"><div class="top"><span class="title">专科确认与处置</span><span class="lane l-doc">专科医生</span></div>
-      <div class="desc">护士筛查、专科确认、必要时安排复诊，决策由医生承担 [f20][f22]</div>
-      <div class="tagrow"><span class="ch i">人工审核</span><span class="ch w">成本</span></div></div></div>
-
-    <div class="step"><div class="rail"><div class="num">12</div><div class="line"></div></div>
-      <div class="card nurse"><div class="top"><span class="title">形成结构化记录</span><span class="lane l-nurse">护士 · 护理部</span></div>
-      <div class="desc">每条辅助结果须显示原记录，未经确认不得覆盖 [f15]</div>
-      <div class="tagrow"><span class="ch i">人工审核</span><span class="ch b">断点</span></div></div></div>
-
-    <div class="step"><div class="rail"><div class="num">13</div><div class="line"></div></div>
-      <div class="card ps"><div class="top"><span class="title">完成率统计与复盘</span><span class="lane l-ps">护理部 · 患者服务</span></div>
-      <div class="desc">口径未统一，发送量常被当成完成量；61% 对目标 85% [f51][f53][f55]</div>
-      <div class="tagrow"><span class="ch b">断点</span><span class="ch w">成本</span></div></div></div>
-
-    <div class="step"><div class="rail"><div class="num">14</div></div>
-      <div class="card qa"><div class="top"><span class="title">反馈受理与留痕归档</span><span class="lane l-qa">患者服务 · 质控</span></div>
-      <div class="desc">反馈须关联业务编号与资料版本；记录留 90 天后由质控确认删除 [f54][f43][f45]</div>
-      <div class="tagrow"><span class="ch i">人工审核</span><span class="ch d">隐私点</span><span class="ch w">成本</span></div></div></div>
-  </div>
-
-  <section>
-    <h2>耗时与成本测算</h2>
-    <div class="metrics">
-      <div class="m"><div class="l">出院患者</div><div class="v">1200 <span style="font-size:13px;color:var(--t2);">人/月</span></div><div class="s">7 天随访窗口 [f00]</div></div>
-      <div class="m"><div class="l">随访缺口</div><div class="v" style="color:var(--c-priv-t)">468 <span style="font-size:13px;color:var(--t2);">人/月</span></div><div class="s">完成率 61% vs 目标 85% [f00]</div></div>
-      <div class="m"><div class="l">现状护士投入</div><div class="v">146 <span style="font-size:13px;color:var(--t2);">工时/月</span></div><div class="s">732 人 × 12 分钟 [f12]</div></div>
-      <div class="m"><div class="l">其中重复填写</div><div class="v" style="color:var(--c-time-t)">49 <span style="font-size:13px;color:var(--t2);">工时/月</span></div><div class="s">占 33%，纯无产出 [f12]</div></div>
+    <div class="legend">
+      <span class="lg"><svg width="46" height="22"><rect x="1" y="1" width="44" height="20" rx="10" fill="#E4F3E8" stroke="#2F8F4E" stroke-width="1.5"/></svg>起止框</span>
+      <span class="lg"><svg width="46" height="22"><rect x="1" y="1" width="44" height="20" rx="3" fill="#fff" stroke="#4A4A4A" stroke-width="1.5"/></svg>流程框（处理）</span>
+      <span class="lg"><svg width="46" height="24"><polygon points="23,1 45,12 23,23 1,12" fill="#FFF7E0" stroke="#B8860B" stroke-width="1.5"/></svg>判断框</span>
+      <span class="lg"><svg width="46" height="22"><path d="M 2 11 H 38" stroke="#555" stroke-width="1.6" marker-end="url(#arr2)"/><defs><marker id="arr2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#555"/></marker></defs></svg>流向</span>
     </div>
-    <table>
-      <thead><tr><th>情形</th><th>有效问诊/处置</th><th>重复填写浪费</th><th>护士总工时/月</th></tr></thead>
-      <tbody>
-        <tr><td>现状（61% 完成）</td><td>98h</td><td>49h</td><td><b>147h</b></td></tr>
-        <tr><td>达标 85% · 沿用人工</td><td>136h</td><td>68h</td><td><b>204h</b>（+40%）</td></tr>
-        <tr><td>达标 85% · 先消除重复填写</td><td>136h</td><td>0h</td><td><b>136h</b></td></tr>
-      </tbody>
-    </table>
-    <p class="note">工时按「人数 × 单次 12 分钟」推算；重复的 4 分钟为已确认事实，其余 8 分钟构成本报告未核实。18 万元试点预算还需扣除接口、培训、复核、维护四项 [f03]。</p>
-    <p class="note">关键结论：达标 85% 不一定加人。若先消除那 4 分钟重复填写，达标后的总工时是 136h，<b>反而低于现状 146h</b>。</p>
-  </section>
+<svg class="main" width="1160" height="1552" viewBox="0 0 1160 1552" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="arr" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+    <path d="M0,0 L9,4.5 L0,9 z" fill="#555"/></marker></defs>
+  <polygon points="400,476 550.0,524.0 400,572 250.0,524.0" fill="#FFF7E0" stroke="#B8860B" stroke-width="2"/><text x="400" y="516.0" text-anchor="middle" class="t">号码有效且</text><text x="400" y="536.0" text-anchor="middle" class="t">已获授权？</text><polygon points="400,740 550.0,788.0 400,836 250.0,788.0" fill="#FFF7E0" stroke="#B8860B" stroke-width="2"/><text x="400" y="780.0" text-anchor="middle" class="t">三次内</text><text x="400" y="800.0" text-anchor="middle" class="t">接通？</text><polygon points="400,1004 550.0,1052.0 400,1100 250.0,1052.0" fill="#FFF7E0" stroke="#B8860B" stroke-width="2"/><text x="400" y="1044.0" text-anchor="middle" class="t">发现红旗</text><text x="400" y="1064.0" text-anchor="middle" class="t">信号？</text><rect x="250.0" y="60" width="300" height="54" rx="27.0" ry="27.0" fill="#E4F3E8" stroke="#2F8F4E" stroke-width="2"/><text x="400" y="92.0" text-anchor="middle" class="t">开始：HIS 生成出院名单</text><rect x="250.0" y="160" width="300" height="62" rx="4" fill="#FFFFFF" stroke="#4A4A4A" stroke-width="2"/><text x="400" y="196.0" text-anchor="middle" class="t">名单导出到表格</text><rect x="250.0" y="262" width="300" height="62" rx="4" fill="#FFFFFF" stroke="#4A4A4A" stroke-width="2"/><text x="400" y="298.0" text-anchor="middle" class="t">护士手工分组排程</text><rect x="250.0" y="364" width="300" height="62" rx="4" fill="#FFFFFF" stroke="#4A4A4A" stroke-width="2"/><text x="400" y="400.0" text-anchor="middle" class="t">核对联系人与授权</text><rect x="250.0" y="628" width="300" height="62" rx="4" fill="#FFFFFF" stroke="#4A4A4A" stroke-width="2"/><text x="400" y="664.0" text-anchor="middle" class="t">逐个拨号触达</text><rect x="250.0" y="892" width="300" height="62" rx="4" fill="#FFFFFF" stroke="#4A4A4A" stroke-width="2"/><text x="400" y="928.0" text-anchor="middle" class="t">电话随访提问</text><rect x="250.0" y="1156" width="300" height="62" rx="4" fill="#FFFFFF" stroke="#4A4A4A" stroke-width="2"/><text x="400" y="1192.0" text-anchor="middle" class="t">手写填写随访记录</text><rect x="250.0" y="1258" width="300" height="62" rx="4" fill="#FFFFFF" stroke="#4A4A4A" stroke-width="2"/><text x="400" y="1294.0" text-anchor="middle" class="t">记录转交专科医生</text><rect x="250.0" y="1360" width="300" height="62" rx="4" fill="#FFFFFF" stroke="#4A4A4A" stroke-width="2"/><text x="400" y="1396.0" text-anchor="middle" class="t">完成率统计与复盘</text><rect x="250.0" y="1468" width="300" height="54" rx="27.0" ry="27.0" fill="#F0F0F0" stroke="#666" stroke-width="2"/><text x="400" y="1500.0" text-anchor="middle" class="t">结束</text><line x1="400" y1="114" x2="400" y2="160" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><line x1="400" y1="222" x2="400" y2="262" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><line x1="400" y1="324" x2="400" y2="364" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><line x1="400" y1="426" x2="400" y2="476" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><line x1="400" y1="572" x2="400" y2="628" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><text x="414" y="590" text-anchor="middle" class="tl">是</text><line x1="400" y1="690" x2="400" y2="740" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><line x1="400" y1="836" x2="400" y2="892" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><text x="414" y="854" text-anchor="middle" class="tl">是</text><line x1="400" y1="954" x2="400" y2="1004" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><line x1="400" y1="1100" x2="400" y2="1156" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><text x="414" y="1118" text-anchor="middle" class="tl">否</text><line x1="400" y1="1218" x2="400" y2="1258" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><line x1="400" y1="1320" x2="400" y2="1360" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><line x1="400" y1="1422" x2="400" y2="1468" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><line x1="550.0" y1="524.0" x2="680" y2="524.0" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><text x="615.0" y="516.0" text-anchor="middle" class="tl">否</text><rect x="680.0" y="497.0" width="220" height="54" rx="4" fill="#FBEAEA" stroke="#B04A4A" stroke-width="1.8"/><text x="790" y="529.0" text-anchor="middle" class="ts">人工回查家属号码</text><path d="M 790,497.0 L 790,395.0 L 556.0,395.0" fill="none" stroke="#555" stroke-width="1.8" stroke-dasharray="5,4" marker-end="url(#arr)"/><line x1="550.0" y1="788.0" x2="680" y2="788.0" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><text x="615.0" y="780.0" text-anchor="middle" class="tl">否</text><rect x="680.0" y="761.0" width="220" height="54" rx="4" fill="#FBEAEA" stroke="#B04A4A" stroke-width="1.8"/><text x="790" y="793.0" text-anchor="middle" class="ts">搁置 · 次日重拨</text><path d="M 790,761.0 L 790,659.0 L 556.0,659.0" fill="none" stroke="#555" stroke-width="1.8" stroke-dasharray="5,4" marker-end="url(#arr)"/><line x1="550.0" y1="1052.0" x2="680" y2="1052.0" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><text x="615.0" y="1044.0" text-anchor="middle" class="tl">是</text><rect x="670.0" y="1025.0" width="240" height="54" rx="4" fill="#FBEAEA" stroke="#B04A4A" stroke-width="1.8"/><text x="790" y="1057.0" text-anchor="middle" class="ts">红旗升级 · 转专科处理</text><path d="M 790,1079.0 L 790,1187.0 L 556.0,1187.0" fill="none" stroke="#555" stroke-width="1.8" marker-end="url(#arr)"/><text x="566.0" y="81.0" class="pb">每月约 1200 名出院患者进入 7 天随访窗口</text><text x="566.0" y="103.0" class="pb">（f00 · 现状量化）</text>
+</svg>
 
-  <section>
-    <h2>人工审核关卡 × 数据隐私位置</h2>
-    <div class="twocol">
-      <div class="col">
-        <h3>必须人工审核的关卡</h3>
-        <div class="cs">AI 越线即为不可逆风险 [f22][f52]</div>
-        <div class="item"><div class="ib ib-h">1</div><div><div class="it">问卷模板发布与变更</div><div class="id">骨科专科逐条签核，记录版本与生效日期，禁用通用建议 [f21]</div></div></div>
-        <div class="item"><div class="ib ib-h">2</div><div><div class="it">红旗症状升级</div><div class="id">立即停问卷，转具名接手人，记录触发原因与人工确认时间 [f11][f44]</div></div></div>
-        <div class="item"><div class="ib ib-h">3</div><div><div class="it">AI 输出内容复核</div><div class="id">仅限整理患者陈述；诊断、调药、代签一律人工 [f22][f52]</div></div></div>
-        <div class="item"><div class="ib ib-h">4</div><div><div class="it">覆盖原记录之前</div><div class="id">辅助结果须显示原记录，未经专科确认不得覆盖 [f15]</div></div></div>
-        <div class="item"><div class="ib ib-h">5</div><div><div class="it">关键字段缺失修复</div><div class="id">进人工修复队列，不允许用猜测值补齐 [f33]</div></div></div>
-        <div class="item"><div class="ib ib-h">6</div><div><div class="it">删除与归档放行</div><div class="id">90 天到期由隐私与质控专员确认；质控对风险条款有否决权 [f43][f04]</div></div></div>
-      </div>
-      <div class="col">
-        <h3>患者数据的隐私落点</h3>
-        <div class="cs">最小必要、院内处理、不外发 [f40]</div>
-        <div class="item"><div class="ib ib-p">1</div><div><div class="it">名单导出落地</div><div class="id">身份、术式、出院时间被导出到本地表格 [f01]</div></div></div>
-        <div class="item"><div class="ib ib-p">2</div><div><div class="it">家属号码与授权状态</div><div class="id">家属不等于已授权联系人，授权须作独立字段 [f31][f33]</div></div></div>
-        <div class="item"><div class="ib ib-p">3</div><div><div class="it">随访录音</div><div class="id">需告知并获授权；患者撤回后不得继续用于训练 [f41]</div></div></div>
-        <div class="item"><div class="ib ib-p">4</div><div><div class="it">群聊与个人表</div><div class="id">健康信息流入非受控渠道，是统计不到的暗数据 [f14]</div></div></div>
-        <div class="item"><div class="ib ib-p">5</div><div><div class="it">AI 处理位置</div><div class="id">院内处理，不发送外部服务；接口只读，无处方与挂号授权 [f40][f32]</div></div></div>
-        <div class="item"><div class="ib ib-p">6</div><div><div class="it">审核日志与快照</div><div class="id">记版本、建议内容、修正与签核人；过期快照不得伪装当前状态 [f45][f34]</div></div></div>
-      </div>
-    </div>
-  </section>
-
-  <div class="footer">
-    本图依据合成访谈报告生成，量化指标为推算值、待补访谈核实；不应作为对外验收承诺。依据编号（f00–f55）对应该发现报告中的事实条目。
-  </div>
-</div>
-</body>
-</html>
+</body></html>
