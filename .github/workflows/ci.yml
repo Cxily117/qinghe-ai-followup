@@ -44,8 +44,10 @@ jobs:
       - name: 迁移能从零建库
         run: alembic upgrade head
 
-      - name: 单元测试
-        run: pytest --cov --cov-report=term-missing
+      - name: 单元测试 + 覆盖率闸门
+        # --cov-fail-under 与 pyproject 的 fail_under 同值：覆盖率掉了直接让 CI 红，
+        # 而不是等评审时才发现"测试越写越少"
+        run: pytest --cov --cov-report=term-missing --cov-fail-under=55
 
       - name: 应用可导入（捕获启动期错误）
         run: python -c "from app.main import app; print('routes:', len(app.routes))"

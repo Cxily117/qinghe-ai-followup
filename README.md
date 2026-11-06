@@ -62,7 +62,8 @@ python scripts/smoke_test.py --base-url http://127.0.0.1:8000
 | 提交前 | `src/.pre-commit-config.yaml`（ruff + 私钥检测 + 大文件拦截） |
 | CI | `.github/workflows/ci.yml`：lint → format → `alembic upgrade head` → pytest --cov → 应用可导入 |
 | 迁移 | Alembic 5 个版本化迁移，CI 每轮从零建库验证 |
-| 单测 | 54 例全绿（护栏 / 脱敏 / 限流 / 规则 / 安全） |
+| 单测 | 97 例全绿（护栏 / 脱敏 / 限流 / 规则 / 安全 + 任务状态机 / 审计落库 / 知识库发布→检索 / 接口契约） |
+| 覆盖率 | 56%（`--cov-fail-under=55` 闸门，掉线 CI 直接红） |
 | 密钥纪律 | `.env`、`*.db`、`.venv`、部署副本均不入库，仅提供 `.env.example` |
 
 ## 里程碑

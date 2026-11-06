@@ -297,8 +297,10 @@ async def generate_draft(
         offsets=offsets,
     )
     if existing is not None:
+        # 必须新建 ai 字典而不是原地改：SQLAlchemy 的 JSON 列靠"新旧值是否相等"判断脏，
+        # 原地改会把旧值一起改掉，两边相等 → 不发 UPDATE，标记静默丢失（已被测试覆盖）。
         meta = dict(existing.content or {})
-        meta.setdefault("ai", {})["reused"] = True
+        meta["ai"] = {**(meta.get("ai") or {}), "reused": True}
         existing.content = meta
         await db.commit()
         await db.refresh(existing)

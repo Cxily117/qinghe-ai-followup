@@ -60,6 +60,10 @@ omit = [
 ]
 
 [tool.coverage.report]
+# 覆盖率闸门：低于此值 `pytest --cov` 直接失败（CI 与 make cov 都生效）。
+# 定在 55 而不是"看上去更漂亮"的 60：闸门的作用是拦住回退，不是逼人写无效测试。
+# 2026-11-06 补完三块 service + 接口层用例后实测 56%，取 55 留 1 个点的浮动余量。
+fail_under = 55
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",

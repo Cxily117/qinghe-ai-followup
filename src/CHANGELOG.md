@@ -5,6 +5,24 @@
 
 ## [Unreleased]
 
+### 测试补强（覆盖率 25% → 56%）
+- 新增 `tests/conftest.py`：真库夹具（临时 SQLite + `Base.metadata.create_all`），
+  此前 5 个测试文件全是纯函数，service 层的 SQL 逻辑（去重窗口、版本号、软撤回）无人覆盖
+- `tests/test_task_service.py`（14 例）：任务状态机 draft→confirmed/cancelled、
+  确认时改节点按同一出院日重算、已确认不可取消、模型编造住院号被拒、24h 去重、越权不可见
+- `tests/test_audit_service.py`（10 例）：脱敏**回读数据库**验证（入参/问题原文/工具结果落库后
+  查不到住院号-手机号-身份证）、业务正文不脱敏的对照项、标记去重与软撤回、审计列表筛选与分页
+- `tests/test_knowledge_service.py`（10 例）：切片合并/滑窗、版本号 +1、发布后旧版自动归档、
+  draft 不可检索 → published 可检索 → archived 又退出检索（用 `rag.retrieve` 真跑）
+- `tests/test_api_flows.py`（9 例）：鉴权 401/403 区分、客户端塞 `status=confirmed` 被忽略、
+  医护越权访问他人草稿 404、知识库发布限管理员、审计标记与质控报表、mock 全链路问答落库
+- 覆盖率闸门：`pyproject.toml` 的 `fail_under = 55` + CI `--cov-fail-under=55`
+
+### 修复
+- **任务去重标记写库丢失**：`generate_draft` 复用草稿时用 `meta.setdefault("ai", {})["reused"] = True`
+  原地改嵌套字典，SQLAlchemy 比对 JSON 新旧值相等 → 不发 UPDATE，`reused` 从未落库
+  （由 `test_generate_draft_dedupes_within_24h` 捕获，改为新建 ai 字典）
+
 ### 工程规范化
 - 引入 ruff 统一 lint 与格式化，规则集写入 `pyproject.toml`（启用 `E/W/F/I/UP/B/BLE/ISC/C4/RUF`，
   豁免中文全角标点、行宽、FastAPI `Depends` 默认参数三条）
