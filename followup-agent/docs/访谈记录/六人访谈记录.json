@@ -1,0 +1,692 @@
+{
+  "title": "清禾综合医院 · 业务需求发现报告",
+  "generatedAt": "2026-11-06T00:46:00.572Z",
+  "library": "general",
+  "publicSources": [],
+  "case": "门诊之后，随访之前",
+  "industry": "医疗",
+  "opening": "出院患者很多，护士打电话打不过来。希望 AI 帮我们做随访，但我们还没想清楚哪些环节可以自动化。",
+  "coverage": {
+    "found": 4,
+    "total": 36,
+    "percent": 11
+  },
+  "note": "本报告基于合成场景访谈；需求为待验证假设。采集完整不等于真实业务需求已确认。",
+  "requirements": [
+    {
+      "title": "随访排程与多渠道触达",
+      "owner": "护理部负责人",
+      "status": "证据待补充",
+      "priority": "P1",
+      "evidence": [
+        {
+          "id": "healthcare-f00",
+          "source": "医疗-001 · 访谈事实记录",
+          "text": "每月约 1200 名出院患者，7 天内随访完成率 61%，目标 85%。",
+          "character": "顾明岚"
+        },
+        {
+          "id": "healthcare-f01",
+          "source": "医疗-002 · 业务事件样本",
+          "text": "患者名单从 HIS 导出，护士手工分组、打电话、写记录，再发给专科。",
+          "character": "顾明岚"
+        }
+      ],
+      "acceptance": "尚未访谈到此项验收或约束，需继续核实。"
+    },
+    {
+      "title": "住院批次与联系人授权映射",
+      "owner": "医院信息工程师",
+      "status": "证据待补充",
+      "priority": "P1",
+      "evidence": [
+        {
+          "id": "healthcare-f30",
+          "source": "医疗-010 · 访谈事实记录",
+          "text": "HIS 与随访表没有统一访谈 ID，重复随访记录需要按住院号及出院时间区分。",
+          "character": "秦芮"
+        },
+        {
+          "id": "healthcare-f31",
+          "source": "医疗-011 · 业务事件样本",
+          "text": "名单存在家属号码，联系人身份和患者授权状态需要单独记录。",
+          "character": "秦芮"
+        }
+      ],
+      "acceptance": "尚未访谈到此项验收或约束，需继续核实。"
+    }
+  ],
+  "gaps": [
+    {
+      "role": "护理部负责人",
+      "character": "顾明岚",
+      "topic": "验收",
+      "question": "怎么验收成功？试点标准是什么？"
+    },
+    {
+      "role": "护理部负责人",
+      "character": "顾明岚",
+      "topic": "预算",
+      "question": "试点预算是多少，成本怎样核算？"
+    },
+    {
+      "role": "护理部负责人",
+      "character": "顾明岚",
+      "topic": "决策",
+      "question": "谁参与决策，谁可以否决方案？"
+    },
+    {
+      "role": "护理部负责人",
+      "character": "顾明岚",
+      "topic": "范围",
+      "question": "首期优先做什么，试点覆盖哪里？"
+    },
+    {
+      "role": "随访护士",
+      "character": "林亦舟",
+      "topic": "痛点",
+      "question": "你日常有哪些痛点，最费时间的环节是什么？"
+    },
+    {
+      "role": "随访护士",
+      "character": "林亦舟",
+      "topic": "异常",
+      "question": "能给我一个具体的异常或失败例子吗？"
+    },
+    {
+      "role": "随访护士",
+      "character": "林亦舟",
+      "topic": "指标",
+      "question": "有多少单、花多久，有统计样本吗？"
+    },
+    {
+      "role": "随访护士",
+      "character": "林亦舟",
+      "topic": "现场",
+      "question": "现场操作有什么限制，设备和网络情况怎样？"
+    },
+    {
+      "role": "随访护士",
+      "character": "林亦舟",
+      "topic": "习惯",
+      "question": "一线有什么绕开系统的习惯，原因是什么？"
+    },
+    {
+      "role": "随访护士",
+      "character": "林亦舟",
+      "topic": "复核",
+      "question": "辅助结果怎么复核，发现错误怎么办？"
+    },
+    {
+      "role": "专科医生",
+      "character": "唐映秋",
+      "topic": "流程",
+      "question": "请讲讲现在实际的处理流程。"
+    },
+    {
+      "role": "专科医生",
+      "character": "唐映秋",
+      "topic": "资料",
+      "question": "可以提供哪些材料、模板或证据？"
+    },
+    {
+      "role": "专科医生",
+      "character": "唐映秋",
+      "topic": "权限",
+      "question": "哪些操作必须人工审批，谁有权限？"
+    },
+    {
+      "role": "专科医生",
+      "character": "唐映秋",
+      "topic": "交接",
+      "question": "交接时需要什么，责任从何时转移？"
+    },
+    {
+      "role": "专科医生",
+      "character": "唐映秋",
+      "topic": "规则",
+      "question": "业务规则如何维护，冲突如何处理？"
+    },
+    {
+      "role": "专科医生",
+      "character": "唐映秋",
+      "topic": "责任",
+      "question": "出现问题谁负责，怎么分派和升级？"
+    },
+    {
+      "role": "医院信息工程师",
+      "character": "秦芮",
+      "topic": "接口",
+      "question": "有哪些接口可用，能读还是能写？"
+    },
+    {
+      "role": "医院信息工程师",
+      "character": "秦芮",
+      "topic": "质量",
+      "question": "怎样判断数据质量，发现脏数据怎么处理？"
+    },
+    {
+      "role": "医院信息工程师",
+      "character": "秦芮",
+      "topic": "更新",
+      "question": "数据多久更新，过期信息如何识别？"
+    },
+    {
+      "role": "医院信息工程师",
+      "character": "秦芮",
+      "topic": "故障",
+      "question": "系统故障或接口中断时怎么办？"
+    },
+    {
+      "role": "隐私与质控专员",
+      "character": "傅景",
+      "topic": "风险",
+      "question": "有哪些安全、合规或业务红线？"
+    },
+    {
+      "role": "隐私与质控专员",
+      "character": "傅景",
+      "topic": "权限",
+      "question": "哪些操作必须人工审批，谁有权限？"
+    },
+    {
+      "role": "隐私与质控专员",
+      "character": "傅景",
+      "topic": "验收",
+      "question": "怎么验收成功？试点标准是什么？"
+    },
+    {
+      "role": "隐私与质控专员",
+      "character": "傅景",
+      "topic": "留存",
+      "question": "记录保留多久，删除和留存如何处理？"
+    },
+    {
+      "role": "隐私与质控专员",
+      "character": "傅景",
+      "topic": "兜底",
+      "question": "哪些情况需要兜底，怎样转人工？"
+    },
+    {
+      "role": "隐私与质控专员",
+      "character": "傅景",
+      "topic": "审计",
+      "question": "审计需要什么凭证，怎么追溯修改？"
+    },
+    {
+      "role": "患者服务经理",
+      "character": "叶书",
+      "topic": "协作",
+      "question": "跨部门交接有哪些冲突？"
+    },
+    {
+      "role": "患者服务经理",
+      "character": "叶书",
+      "topic": "指标",
+      "question": "有多少单、花多久，有统计样本吗？"
+    },
+    {
+      "role": "患者服务经理",
+      "character": "叶书",
+      "topic": "边界",
+      "question": "本次范围是什么，哪些事情不能自动做？"
+    },
+    {
+      "role": "患者服务经理",
+      "character": "叶书",
+      "topic": "口径",
+      "question": "不同团队对成功和完成的口径有哪些差异？"
+    },
+    {
+      "role": "患者服务经理",
+      "character": "叶书",
+      "topic": "投诉",
+      "question": "客户投诉或反馈如何处理？"
+    },
+    {
+      "role": "患者服务经理",
+      "character": "叶书",
+      "topic": "反馈",
+      "question": "试点反馈怎么收集，怎样形成改进闭环？"
+    }
+  ],
+  "transcript": [
+    {
+      "id": "turn-1",
+      "speaker": "user",
+      "characterId": "healthcare-r3",
+      "text": "请你讲述一次具体的医院随访经历，遇到了什么具体的问题，如果可以量化就直接体现出来，越详细越好，我要记录一次具体的典型事件",
+      "at": "2026-11-06T00:30:43.826Z"
+    },
+    {
+      "id": "turn-2",
+      "speaker": "character",
+      "characterId": "healthcare-r3",
+      "text": "我讲一个和系统数据直接相关的典型事件，但先说明：具体日期、涉及人数和耗时我尚未核实，只能按我经手时的系统现象描述，量化数字需要后续从日志里调取。\n\n那次是某住院批次出院后进入随访排程。问题出在标识和授权两处：HIS 与随访表没有统一访谈 ID，同一患者多次住院时，随访记录只能按住院号加出院时间区分 [healthcare-f30]；同时名单里混入了家属号码，联系人身份和患者授权状态没有单独字段承载 [healthcare-f31]。结果就是护士看到重复记录难以判断归属，外呼时也无法确认该号码是否已获授权，只能人工回查。\n\n这对我职责的影响很直接：住院批次与联系人授权映射如果不先定字段和主键规则，后续多渠道触达和留痕都会建立在不可靠的数据上。我这边不能越过隐私与质控的审核边界自行决定授权口径。想请你澄清：这次事件你希望记录到哪个粒度，是系统现象还是需要我列出待补的字段清单？后者我可以作为待验证建议提出。",
+      "at": "2026-11-06T00:30:43.826Z",
+      "factIds": [
+        "healthcare-f30",
+        "healthcare-f31"
+      ],
+      "mode": "在线模型对话",
+      "audit": {
+        "provider": "DeepSeek",
+        "model": "deepseek-flash",
+        "requestId": "3de52bfb-061c-44ad-9f40-5ff9e877eab9",
+        "at": "2026-11-06T00:30:43.826Z",
+        "durationMs": 2626,
+        "usage": {
+          "prompt_tokens": 807,
+          "completion_tokens": 264,
+          "total_tokens": 1071
+        },
+        "attemptCount": 1,
+        "selection": {
+          "provider": "DeepSeek",
+          "model": "deepseek-flash",
+          "requestId": "9ff007c8-573c-44a1-8b0c-bc0b19fda7d3",
+          "at": "2026-11-06T00:30:41.200Z",
+          "durationMs": 385,
+          "usage": {
+            "prompt_tokens": 388,
+            "completion_tokens": 36,
+            "total_tokens": 424
+          },
+          "attemptCount": 1
+        }
+      }
+    },
+    {
+      "id": "turn-3",
+      "speaker": "user",
+      "characterId": "healthcare-r3",
+      "text": "是否还有其他随访过程中，你觉得有比较耗时耗力，不方便的地方，请具体用量化的形式告诉我",
+      "at": "2026-11-06T00:33:20.330Z"
+    },
+    {
+      "id": "turn-4",
+      "speaker": "character",
+      "characterId": "healthcare-r3",
+      "text": "量化数字我这边不能凭印象给，需要从系统日志和护士操作记录里调取，目前尚未核实。但从系统侧看，耗时点集中在两处：一是 HIS 与随访表没有统一访谈 ID，同一患者多次住院时只能按住院号加出院时间人工比对归属 [healthcare-f30]；二是名单里混入家属号码，联系人身份和授权状态没有单独字段，护士外呼前得逐个回查 [healthcare-f31]。这两件事每次随访都要重复做，属于结构性耗时，不是偶发。\n\n如果你要量化，我建议先明确口径：是统计护士单次随访的准备耗时，还是整批名单的核对耗时？前者需要护理部配合记录，后者我可以从日志里拉取，但涉及患者信息，得先过隐私与质控的审核边界。你希望按哪个口径来，我再判断数据能不能取、怎么取。",
+      "at": "2026-11-06T00:33:20.330Z",
+      "factIds": [
+        "healthcare-f30",
+        "healthcare-f31"
+      ],
+      "mode": "在线模型对话",
+      "audit": {
+        "provider": "DeepSeek",
+        "model": "deepseek-flash",
+        "requestId": "0b5181fc-7a00-4fcf-ad6e-1b5c73cfe7c6",
+        "at": "2026-11-06T00:33:20.330Z",
+        "durationMs": 1927,
+        "usage": {
+          "prompt_tokens": 1110,
+          "completion_tokens": 212,
+          "total_tokens": 1322
+        },
+        "attemptCount": 1,
+        "selection": {
+          "provider": "DeepSeek",
+          "model": "deepseek-flash",
+          "requestId": "85fd6417-2c24-4d23-ac89-063b062cb0bf",
+          "at": "2026-11-06T00:33:18.403Z",
+          "durationMs": 1263,
+          "usage": {
+            "prompt_tokens": 690,
+            "completion_tokens": 21,
+            "total_tokens": 711
+          },
+          "attemptCount": 1
+        }
+      }
+    },
+    {
+      "id": "turn-5",
+      "speaker": "user",
+      "characterId": "healthcare-r0",
+      "text": "请你讲述一次具体的医院随访经历，遇到了什么具体的问题，如果可以量化就直接体现出来，越详细越好，我要记录一次具体的典型事件",
+      "at": "2026-11-06T00:44:06.938Z"
+    },
+    {
+      "id": "turn-6",
+      "speaker": "character",
+      "characterId": "healthcare-r0",
+      "text": "我讲一个能落到数字上的典型情况。我们每月约1200名出院患者，7天内随访完成率只有61%，离85%的目标差得很远[healthcare-f00]。现场是这样运转的：患者名单从HIS导出后，护士手工分组、逐个打电话、手写记录，再把结果发给专科[healthcare-f01]。问题就出在这条链上——名单导出后没有自动排程，谁先打谁后打靠护士自己判断；电话打不通、患者不在、号码不对，都要反复重拨，占掉大量时间；记录是手写的，回头专科要追问细节，护士还得翻本子回忆。结果就是护士忙不过来，完成率上不去，危险信号也没法保证第一时间被识别和升级。所以我的诉求很明确：排程和多渠道触达这块要能替护士分担，但哪些环节能自动化、哪些必须护士确认，我还没想清楚，需要你们帮我把边界划出来。另外，危险信号升级和专科审核模板这两块，涉及临床责任，不能只由护理部单方面定，得拉唐映秋和傅景一起过。",
+      "at": "2026-11-06T00:44:06.938Z",
+      "factIds": [
+        "healthcare-f00",
+        "healthcare-f01"
+      ],
+      "mode": "在线模型对话",
+      "audit": {
+        "provider": "DeepSeek",
+        "model": "deepseek-flash",
+        "requestId": "86930c5a-7aae-4cd4-b657-847f99743547",
+        "at": "2026-11-06T00:44:06.938Z",
+        "durationMs": 3027,
+        "usage": {
+          "prompt_tokens": 813,
+          "completion_tokens": 259,
+          "total_tokens": 1072
+        },
+        "attemptCount": 1,
+        "selection": {
+          "provider": "DeepSeek",
+          "model": "deepseek-flash",
+          "requestId": "654fdb63-36e5-484e-b5de-8195a7c6d1a0",
+          "at": "2026-11-06T00:44:03.911Z",
+          "durationMs": 688,
+          "usage": {
+            "prompt_tokens": 385,
+            "completion_tokens": 26,
+            "total_tokens": 411
+          },
+          "attemptCount": 1
+        }
+      }
+    },
+    {
+      "id": "turn-7",
+      "speaker": "user",
+      "characterId": "healthcare-r0",
+      "text": "是否还有其他随访过程中，你觉得有比较耗时耗力，不方便的地方，请具体用量化的形式告诉我",
+      "at": "2026-11-06T00:45:12.367Z"
+    },
+    {
+      "id": "turn-8",
+      "speaker": "character",
+      "characterId": "healthcare-r0",
+      "text": "耗时点我能说清楚，但量化只能给到已核实的那部分。目前每月约1200名出院患者、7天内随访完成率61%、目标85%[healthcare-f00]，这中间的缺口主要耗在名单导出后的手工环节：护士要自己分组、逐个打电话、手写记录再发给专科[healthcare-f01]。具体到“每次重拨花几分钟”“号码错误占多少比例”，我手上没有统计，尚未核实，不能凭印象给你数字。\n\n从我的职责看，排程和多渠道触达是我要推动的方向，但试点范围得先划清：哪些提醒可以系统自动发、哪些必须护士确认后记录，这条线不划出来，我不敢扩大试点。另外，如果你们要拿耗时数据做验收依据，需要先明确由谁采集、采集口径是什么，这涉及护士工作量和留痕，得和秦芮、傅景对齐。你可以先告诉我，你们最想量化的是排程耗时还是触达失败率，我按这个方向去核实。",
+      "at": "2026-11-06T00:45:12.367Z",
+      "factIds": [
+        "healthcare-f00",
+        "healthcare-f01"
+      ],
+      "mode": "在线模型对话",
+      "audit": {
+        "provider": "DeepSeek",
+        "model": "deepseek-flash",
+        "requestId": "36d5e80a-4bca-43d7-bd03-14255f2d9760",
+        "at": "2026-11-06T00:45:12.366Z",
+        "durationMs": 2272,
+        "usage": {
+          "prompt_tokens": 1112,
+          "completion_tokens": 238,
+          "total_tokens": 1350
+        },
+        "attemptCount": 1,
+        "selection": {
+          "provider": "DeepSeek",
+          "model": "deepseek-flash",
+          "requestId": "accfe840-fd36-4bce-ab3b-782425671c43",
+          "at": "2026-11-06T00:45:10.094Z",
+          "durationMs": 554,
+          "usage": {
+            "prompt_tokens": 683,
+            "completion_tokens": 16,
+            "total_tokens": 699
+          },
+          "attemptCount": 1
+        }
+      }
+    }
+  ],
+  "methodContext": {
+    "buyer": "顾明岚",
+    "operator": "林亦舟"
+  },
+  "framework": "基于 fde-simulation 的 workflow-decomposition、outcome-risk-matrix 与 4-source-convergence 框架进行需求归纳。",
+  "analysis": {
+    "summary": "现有事实只覆盖目标缺口（月约1200名出院患者、7天随访完成率61%对85%）和手工流程（HIS导出、护士分组外呼手写记录再发专科），以及系统侧两个结构性障碍：HIS与随访表无统一访谈ID、名单混入家属号码且授权状态无字段承载。访谈中两位受访者均明确量化数据尚未核实，因此瓶颈可定位在“名单准备与授权确认”和“排程与触达”两段，但耗时、重拨率、号码错误率均无事实支撑。切入点建议先做数据与授权映射的最小验证，再做排程试点；危险信号升级与专科审核涉及临床责任，需唐映秋、傅景共同确认，当前无相关事实，不形成假设。调查覆盖率4/36，不代表验收通过。",
+    "hypotheses": [
+      {
+        "title": "随访记录唯一标识与住院批次映射需先定规则",
+        "owner": "秦芮（信息工程师）牵头，顾明岚配合",
+        "priority": "P0",
+        "reasoning": "事实显示HIS与随访表无统一访谈ID，多次住院只能按住院号加出院时间人工比对归属，护士难以判断重复记录归属。这是排程与留痕的数据前提，但字段与主键规则尚未确定，且需过隐私与质控审核边界。",
+        "nextStep": "由秦芮列出待补字段与主键规则草案，选取一个历史住院批次做只读比对，验证重复记录可被唯一归属；规则定稿前需傅景确认授权口径，顾明岚确认护士可用性。",
+        "evidenceIds": [
+          "healthcare-f30",
+          "healthcare-f01"
+        ]
+      },
+      {
+        "title": "联系人身份与患者授权状态需独立字段承载",
+        "owner": "傅景（隐私与质控专员）定口径，秦芮落字段",
+        "priority": "P0",
+        "reasoning": "名单存在家属号码，联系人身份和授权状态无单独记录，护士外呼前需逐个回查，属结构性耗时。授权口径不能由信息侧自行决定，当前无授权接口事实，只能先做记录与人工确认。",
+        "nextStep": "抽取一小批名单，人工标注联系人身份与授权状态，验证字段可承载且可回查；由傅景确认授权判定规则，未获授权号码不进入自动触达。",
+        "evidenceIds": [
+          "healthcare-f31",
+          "healthcare-f30"
+        ]
+      },
+      {
+        "title": "排程与多渠道触达可分担护士手工分组与外呼",
+        "owner": "顾明岚（护理部负责人）",
+        "priority": "P1",
+        "reasoning": "流程为名单导出后护士手工分组、逐个打电话、手写记录再发专科，完成率61%低于85%目标。排程与触达是明确方向，但哪些提醒可系统自动发、哪些必须护士确认后记录，边界未划清，且量化耗时未核实。",
+        "nextStep": "先试点骨科常规术后患者，仅对已确认授权的号码做提醒发送，护士确认后记录；考核触达率、人工工时与红旗事件漏报率，采集口径由顾明岚与秦芮先对齐。",
+        "evidenceIds": [
+          "healthcare-f00",
+          "healthcare-f01"
+        ]
+      },
+      {
+        "title": "手工记录转交专科造成信息回溯成本",
+        "owner": "林亦舟（随访护士）",
+        "priority": "P1",
+        "reasoning": "记录为手写，专科追问细节时护士需翻本子回忆，说明记录结构化不足。但访谈未提供回溯频次与耗时，属待验证推断，不能作为验收指标。",
+        "nextStep": "由林亦舟记录一周内专科追问次数与典型追问内容，判断是否值得结构化记录；样本量小，仅作方向验证。",
+        "evidenceIds": [
+          "healthcare-f01",
+          "healthcare-f00"
+        ]
+      },
+      {
+        "title": "危险信号识别与升级边界需临床共同确认",
+        "owner": "唐映秋（专科医生）与傅景共同确认",
+        "priority": "P1",
+        "reasoning": "顾明岚明确危险信号升级和专科审核模板涉及临床责任，不能由护理部单方定。当前无红旗事件定义、升级路径或漏报数据的事实，只能作为待验证需求提出，不能预设自动化能力。",
+        "nextStep": "组织唐映秋、傅景、顾明岚确认红旗事件清单与升级责任人，先以人工升级跑通流程并记录漏报情况，再评估是否引入系统提示。",
+        "evidenceIds": [
+          "healthcare-f00",
+          "healthcare-f01"
+        ]
+      },
+      {
+        "title": "量化基线需先定采集口径再作验收依据",
+        "owner": "顾明岚与秦芮对齐，傅景审核数据取用",
+        "priority": "P2",
+        "reasoning": "两位受访者均表示重拨耗时、号码错误比例等尚未核实，且取日志涉及患者信息需过隐私审核。没有基线就无法判断自动化是否改善，但当前不能编造指标。",
+        "nextStep": "先明确统计口径（单次准备耗时或整批核对耗时），由护理部记录、秦芮取日志，傅景审核取数范围；口径确认前不设量化验收线。",
+        "evidenceIds": [
+          "healthcare-f00",
+          "healthcare-f31"
+        ]
+      }
+    ],
+    "followUps": [
+      "顾明岚：试点骨科常规术后患者的纳入与排除标准是什么，由谁判定？",
+      "秦芮：现有只读患者名单接口能提供哪些字段，是否含住院批次与出院时间？",
+      "傅景：家属号码在何种条件下可视为已获授权，授权记录应保存多久？",
+      "林亦舟：一周内专科追问细节的典型场景有哪些，能否记录次数？",
+      "唐映秋：哪些术后症状应列为红旗事件，升级由谁在多久内响应？",
+      "顾明岚：系统自动提醒与护士确认记录的边界，您倾向按什么原则划？",
+      "秦芮：随访记录与HIS比对目前是否可只读导出，是否涉及患者信息出库？",
+      "叶书：患者侧对随访渠道（电话、短信等）有无偏好或投诉反馈？"
+    ],
+    "limitations": "仅采集4条事实，覆盖率4/36；访谈中量化数据均标注尚未核实，无重拨率、号码错误率、单次耗时等基线；无红旗事件定义、升级路径与漏报数据；无授权接口与自动触达能力的事实；未采集唐映秋、林亦舟、傅景、叶书的直接访谈，四来源尚未收敛，以上均为待验证假设，不构成验收结论。",
+    "audit": {
+      "provider": "DeepSeek",
+      "model": "deepseek-flash",
+      "requestId": "16b36ccc-8fec-4feb-859a-1a6b497d101e",
+      "at": "2026-11-06T00:46:00.572Z",
+      "durationMs": 9829,
+      "usage": {
+        "prompt_tokens": 1946,
+        "completion_tokens": 1350,
+        "total_tokens": 3296
+      },
+      "attemptCount": 1
+    }
+  },
+  "methodology": {
+    "version": 1,
+    "guide": [
+      {
+        "id": "workflow-decomposition",
+        "name": "业务流程拆解",
+        "file": "frameworks/workflow-decomposition.md",
+        "question": "问题发生在哪一步，为什么要这样划分智能体？",
+        "steps": [
+          "先画人工现状泳道，写出触发、输入、8–15个处理步骤、交接和异常。",
+          "区分判断点与执行点；按使用的数据、权限、模型能力与失败方式组合执行步骤。",
+          "在不可逆动作前设置确定性校验；为低置信、缺资料、冲突和越权安排具名人工接收人。"
+        ],
+        "output": "现状流程 → 失败方式 → 智能体/工具边界 → 校验与人工升级路径"
+      },
+      {
+        "id": "outcome-risk-matrix",
+        "name": "业务结果与不可逆风险矩阵",
+        "file": "frameworks/outcome-risk-matrix.md",
+        "question": "多个需求中，先做哪个最小可验证方案？",
+        "steps": [
+          "列出3–5个候选切入点，分别说明改善的业务结果、现状基线和投入。",
+          "评估失败何时被谁看见、能否在损害前拦截、是否可以撤销；不要把模型置信度等同于业务风险。",
+          "优先选择高价值、可拦截且可恢复的切入点；高风险需硬约束和责任人否决权，价值或风险未知先补证据。"
+        ],
+        "output": "候选方案 → 价值/风险比较 → 选择与暂缓理由 → 验收指标与停止条件"
+      },
+      {
+        "id": "4-source-convergence",
+        "name": "四来源收敛",
+        "file": "frameworks/4-source-convergence.md",
+        "question": "谁说要做，哪里真的坏了，范围允许什么，技术是否可行？",
+        "steps": [
+          "Buyer：核实业务目标、预算、优先级和决定权；Operator：用最近一单还原真实操作和失败位置。",
+          "Brief：核对书面目标、范围、时间和排除项；Industry：寻找可比技术实践，并核实本项目的数据与接口差异。",
+          "检查四个视角是否指向同一瓶颈。分歧保留在问题清单：一线帮助定位故障，决策者确认价值，Brief约束范围，行业证据帮助判断可行性。"
+        ],
+        "output": "四视角陈述与来源 → 收敛/分歧 → 待核实问题 → 有边界的需求假设"
+      }
+    ],
+    "sources": [
+      {
+        "id": "buyer",
+        "name": "Buyer · 业务决策者",
+        "statement": "顾明岚",
+        "evidenceIds": [
+          "healthcare-f00",
+          "healthcare-f01"
+        ],
+        "status": "已采集角色陈述，目标和预算仍待确认"
+      },
+      {
+        "id": "brief",
+        "name": "Brief · 书面需求",
+        "statement": "出院患者很多，护士打电话打不过来。希望 AI 帮我们做随访，但我们还没想清楚哪些环节可以自动化。",
+        "evidenceIds": [],
+        "status": "当前只有场景开场；书面Brief原文与版本待补"
+      },
+      {
+        "id": "industry",
+        "name": "Industry · 行业可行性",
+        "statement": "需要可比技术案例、数据条件和接口能力的核验材料。企业业务介绍不能证明技术可行。",
+        "evidenceIds": [],
+        "status": "待补行业实践与本项目适用性验证"
+      },
+      {
+        "id": "operator",
+        "name": "Operator · 一线使用者",
+        "statement": "林亦舟",
+        "evidenceIds": [],
+        "status": "待访谈"
+      }
+    ],
+    "trace": [
+      {
+        "id": "REQ-1",
+        "title": "随访记录唯一标识与住院批次映射需先定规则",
+        "evidenceIds": [
+          "healthcare-f30",
+          "healthcare-f01"
+        ],
+        "derivation": "事实显示HIS与随访表无统一访谈ID，多次住院只能按住院号加出院时间人工比对归属，护士难以判断重复记录归属。这是排程与留痕的数据前提，但字段与主键规则尚未确定，且需过隐私与质控审核边界。",
+        "priority": "P0",
+        "decision": "候选需求；需用结果与不可逆风险矩阵比较，P0/P1/P2不等于已完成价值风险评分。",
+        "verification": "由秦芮列出待补字段与主键规则草案，选取一个历史住院批次做只读比对，验证重复记录可被唯一归属；规则定稿前需傅景确认授权口径，顾明岚确认护士可用性。"
+      },
+      {
+        "id": "REQ-2",
+        "title": "联系人身份与患者授权状态需独立字段承载",
+        "evidenceIds": [
+          "healthcare-f31",
+          "healthcare-f30"
+        ],
+        "derivation": "名单存在家属号码，联系人身份和授权状态无单独记录，护士外呼前需逐个回查，属结构性耗时。授权口径不能由信息侧自行决定，当前无授权接口事实，只能先做记录与人工确认。",
+        "priority": "P0",
+        "decision": "候选需求；需用结果与不可逆风险矩阵比较，P0/P1/P2不等于已完成价值风险评分。",
+        "verification": "抽取一小批名单，人工标注联系人身份与授权状态，验证字段可承载且可回查；由傅景确认授权判定规则，未获授权号码不进入自动触达。"
+      },
+      {
+        "id": "REQ-3",
+        "title": "排程与多渠道触达可分担护士手工分组与外呼",
+        "evidenceIds": [
+          "healthcare-f00",
+          "healthcare-f01"
+        ],
+        "derivation": "流程为名单导出后护士手工分组、逐个打电话、手写记录再发专科，完成率61%低于85%目标。排程与触达是明确方向，但哪些提醒可系统自动发、哪些必须护士确认后记录，边界未划清，且量化耗时未核实。",
+        "priority": "P1",
+        "decision": "候选需求；需用结果与不可逆风险矩阵比较，P0/P1/P2不等于已完成价值风险评分。",
+        "verification": "先试点骨科常规术后患者，仅对已确认授权的号码做提醒发送，护士确认后记录；考核触达率、人工工时与红旗事件漏报率，采集口径由顾明岚与秦芮先对齐。"
+      },
+      {
+        "id": "REQ-4",
+        "title": "手工记录转交专科造成信息回溯成本",
+        "evidenceIds": [
+          "healthcare-f01",
+          "healthcare-f00"
+        ],
+        "derivation": "记录为手写，专科追问细节时护士需翻本子回忆，说明记录结构化不足。但访谈未提供回溯频次与耗时，属待验证推断，不能作为验收指标。",
+        "priority": "P1",
+        "decision": "候选需求；需用结果与不可逆风险矩阵比较，P0/P1/P2不等于已完成价值风险评分。",
+        "verification": "由林亦舟记录一周内专科追问次数与典型追问内容，判断是否值得结构化记录；样本量小，仅作方向验证。"
+      },
+      {
+        "id": "REQ-5",
+        "title": "危险信号识别与升级边界需临床共同确认",
+        "evidenceIds": [
+          "healthcare-f00",
+          "healthcare-f01"
+        ],
+        "derivation": "顾明岚明确危险信号升级和专科审核模板涉及临床责任，不能由护理部单方定。当前无红旗事件定义、升级路径或漏报数据的事实，只能作为待验证需求提出，不能预设自动化能力。",
+        "priority": "P1",
+        "decision": "候选需求；需用结果与不可逆风险矩阵比较，P0/P1/P2不等于已完成价值风险评分。",
+        "verification": "组织唐映秋、傅景、顾明岚确认红旗事件清单与升级责任人，先以人工升级跑通流程并记录漏报情况，再评估是否引入系统提示。"
+      },
+      {
+        "id": "REQ-6",
+        "title": "量化基线需先定采集口径再作验收依据",
+        "evidenceIds": [
+          "healthcare-f00",
+          "healthcare-f31"
+        ],
+        "derivation": "两位受访者均表示重拨耗时、号码错误比例等尚未核实，且取日志涉及患者信息需过隐私审核。没有基线就无法判断自动化是否改善，但当前不能编造指标。",
+        "priority": "P2",
+        "decision": "候选需求；需用结果与不可逆风险矩阵比较，P0/P1/P2不等于已完成价值风险评分。",
+        "verification": "先明确统计口径（单次准备耗时或整批核对耗时），由护理部记录、秦芮取日志，傅景审核取数范围；口径确认前不设量化验收线。"
+      }
+    ],
+    "conclusion": "先从已采集事实形成问题假设，再约定业务结果、范围、失败控制和验收。缺少的来源标记待补，不能把六人访谈完整率当作四来源收敛或需求确认。"
+  },
+  "handoff": {
+    "reportId": "REPORT-46ba5539-e36d-4cab-af03-0648bedd78bf",
+    "version": 1,
+    "sourceStage": "opportunity",
+    "targetStage": "discovery",
+    "href": "/group-training?project=healthcare&attemptId=4fa39d4a-5fdc-433a-8c18-1176319b7dfb&stage=discovery",
+    "stageHref": "/group-training?project=healthcare&attemptId=4fa39d4a-5fdc-433a-8c18-1176319b7dfb&stage=opportunity"
+  }
+}
