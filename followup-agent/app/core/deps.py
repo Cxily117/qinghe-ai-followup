@@ -5,6 +5,7 @@ RBAC 设计（对应需求清单「三角色、多科室」的最小实现）：
   - admin：管理员，额外可维护知识库、看质控报表
   科室级数据隔离在 D6 引入（当前先落 role 字段与 department 字段）。
 """
+
 from typing import Annotated
 
 import jwt

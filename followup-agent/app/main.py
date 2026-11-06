@@ -10,6 +10,7 @@
   http://127.0.0.1:8000/admin       管理后台（服务端渲染，仅 admin）
   http://127.0.0.1:8000/docs        接口文档
 """
+
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -39,7 +40,9 @@ async def lifespan(app: FastAPI):
     # "大模型连接失败" 这类报障，第一件事就是确认供应商/模型/base/key 到没到位——
     # 有这行日志，不用翻 .env 也不用猜。
     s = get_settings()
-    key_state = f"已配置（{s.llm_api_key[:6]}…，{len(s.llm_api_key)} 位）" if s.llm_api_key else "❌ 未配置"
+    key_state = (
+        f"已配置（{s.llm_api_key[:6]}…，{len(s.llm_api_key)} 位）" if s.llm_api_key else "❌ 未配置"
+    )
     logger.warning(
         "LLM 配置：provider=%s model=%s base=%s key=%s | embedding=%s/%s(%d 维)",
         s.llm_provider,
@@ -60,8 +63,10 @@ async def lifespan(app: FastAPI):
             # 患者目录一起播种（幂等）：演示患者属于「数据」，不该写死在代码里。
             # 接真实 HIS/EMPI 时把这一步换成同步任务即可，表结构和上层代码都不用动。
             await patient_service.ensure_seed(db)
-    except Exception:  # noqa: BLE001 —— 迁移没跑/库连不上时不该让服务起不来
-        logger.warning("提示词/患者种子初始化失败（可能尚未执行 alembic upgrade head）", exc_info=True)
+    except Exception:
+        logger.warning(
+            "提示词/患者种子初始化失败（可能尚未执行 alembic upgrade head）", exc_info=True
+        )
     yield
 
 

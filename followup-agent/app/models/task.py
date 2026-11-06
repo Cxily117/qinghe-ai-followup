@@ -3,6 +3,7 @@
 硬关卡落库的地方：AI 只能写 draft，confirmed 必须由人点击
 （对应需求清单「任务止步草稿」的架构决策）。
 """
+
 from datetime import datetime
 
 from sqlalchemy import JSON, DateTime, ForeignKey, String, func
@@ -22,18 +23,12 @@ class FollowupTaskDraft(Base):
     # 患者引用（D1–D2 先存外键标识，正式版对接 EMPI 后替换为 patient_id）
     patient_ref: Mapped[str] = mapped_column(String(64), index=True)
     plan_type: Mapped[str] = mapped_column(String(64), default="")  # 病种/随访方案
-    scheduled_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # 随访项/时间点等结构化内容
     content: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(
         String(16), default="draft", index=True
     )  # draft|confirmed|cancelled
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    confirmed_by: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id"), nullable=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    confirmed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

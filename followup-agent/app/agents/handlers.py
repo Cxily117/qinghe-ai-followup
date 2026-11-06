@@ -9,6 +9,7 @@
 
 这一层是"可举证"的落点：模型说的每句话要么来自这里的返回，要么就是它编的。
 """
+
 from __future__ import annotations
 
 import logging
@@ -44,7 +45,7 @@ async def resolve_patient(state: RunState, args: dict, db: AsyncSession) -> dict
 
     try:
         hit, candidates = await patient_service.find_exact(db, ref)
-    except Exception:  # noqa: BLE001 —— 迁移没跑/库连不上时，不能让整轮问答崩掉
+    except Exception:
         logger.warning("患者目录查询失败", exc_info=True)
         return {
             "found": False,
@@ -164,16 +165,20 @@ async def list_existing_tasks(state: RunState, args: dict, db: AsyncSession) -> 
         return {"items": [], "reason": "patient_id 与本轮已解析的患者不一致，请重新解析"}
 
     rows = (
-        await db.execute(
-            select(FollowupTaskDraft)
-            .where(
-                FollowupTaskDraft.patient_ref == patient_id,
-                FollowupTaskDraft.status != "cancelled",
+        (
+            await db.execute(
+                select(FollowupTaskDraft)
+                .where(
+                    FollowupTaskDraft.patient_ref == patient_id,
+                    FollowupTaskDraft.status != "cancelled",
+                )
+                .order_by(FollowupTaskDraft.id.desc())
+                .limit(5)
             )
-            .order_by(FollowupTaskDraft.id.desc())
-            .limit(5)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     items = []
     for r in rows:
@@ -191,7 +196,11 @@ async def list_existing_tasks(state: RunState, args: dict, db: AsyncSession) -> 
 async def handoff_to_human(state: RunState, args: dict, db: AsyncSession) -> dict:
     reason = (args.get("reason") or "").strip() or "未说明原因"
     state.flags.add("handoff")
-    return {"handoff": True, "reason": reason, "message": "已标记转人工，回答中请说明已转交并停止推断"}
+    return {
+        "handoff": True,
+        "reason": reason,
+        "message": "已标记转人工，回答中请说明已转交并停止推断",
+    }
 
 
 async def check_followup_rule(state: RunState, args: dict, db: AsyncSession) -> dict:
@@ -204,7 +213,11 @@ async def check_followup_rule(state: RunState, args: dict, db: AsyncSession) -> 
     """
     patient_id = (args.get("patient_id") or state.patient_id or "").strip()
     if not patient_id:
-        return {"ok": False, "error": "patient_required", "hint": "请先调用 resolve_patient 确认患者"}
+        return {
+            "ok": False,
+            "error": "patient_required",
+            "hint": "请先调用 resolve_patient 确认患者",
+        }
     if state.patient_id and patient_id != state.patient_id:
         return {
             "ok": False,
@@ -223,8 +236,7 @@ async def check_followup_rule(state: RunState, args: dict, db: AsyncSession) -> 
     verdict = rules.evaluate(plan_type, args.get("items"), evidence_ids=evidence_ids)
     payload = verdict.as_dict()
     payload["evidence"] = [
-        {"n": e["n"], "doc_title": e["doc_title"], "content": e["content"][:160]}
-        for e in evidence
+        {"n": e["n"], "doc_title": e["doc_title"], "content": e["content"][:160]} for e in evidence
     ]
     payload["ok"] = True
 
@@ -250,7 +262,9 @@ async def check_followup_rule(state: RunState, args: dict, db: AsyncSession) -> 
         )
     else:
         state.flags.add("rule_failed")
-        payload["hint"] = "不得为了让校验通过而自行改动医护的方案；请说明违反了哪条，等医护确认后再重新校验。"
+        payload["hint"] = (
+            "不得为了让校验通过而自行改动医护的方案；请说明违反了哪条，等医护确认后再重新校验。"
+        )
 
     return payload
 

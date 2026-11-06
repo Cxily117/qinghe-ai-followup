@@ -5,12 +5,13 @@
   - 单元测试里避免外网依赖与费用；
   - 演示「拒答护栏」：检索为空时回答固定的拒绝话术，并【不】标注引用。
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import re
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 from app.agents.gateway.base import ChatResult, LLMProvider, ToolCall, timer_start
 from app.agents.rules import match_profile
@@ -21,8 +22,20 @@ CREATE_DRAFT_NAME = "create_followup_task_draft"
 
 # 三条脚本化路径的关键词（对应 docs/agent-trajectories.md 的三条典型轨迹）
 _RED_FLAG_WORDS = (
-    "胸痛", "胸闷", "气促", "呼吸困难", "发热", "发烧", "高热",
-    "渗液", "红肿", "感染", "晕厥", "意识", "剧痛", "出血",
+    "胸痛",
+    "胸闷",
+    "气促",
+    "呼吸困难",
+    "发热",
+    "发烧",
+    "高热",
+    "渗液",
+    "红肿",
+    "感染",
+    "晕厥",
+    "意识",
+    "剧痛",
+    "出血",
 )
 _CREATE_WORDS = ("新建", "创建", "录入", "建一份", "生成随访", "排一下", "安排随访")
 
@@ -63,7 +76,8 @@ def _last_tool_payload(messages: list[dict]) -> dict:
         return {}
     try:
         return json.loads(tool_msgs[-1].get("content") or "{}")
-    except Exception:
+    except Exception:  # noqa: BLE001 —— 模型给的参数不是合法 JSON：当空参处理，
+        #   后面的工具校验会拒绝，而不是在这里抛栈打断整轮
         return {}
 
 
@@ -79,7 +93,7 @@ def _payload_with(messages: list[dict], *keys: str) -> dict:
             continue
         try:
             payload = json.loads(m.get("content") or "{}")
-        except Exception:
+        except Exception:  # noqa: BLE001 —— 跳过坏掉的历史消息，不影响后面的匹配
             continue
         if all(k in payload for k in keys):
             return payload
@@ -163,9 +177,7 @@ def _agent_next_step(
                 )
             hits = _payload_with(messages, "hits").get("hits") or []
             level = "高危" if risk.get("level") == "high" else "需关注"
-            actions = "；".join(
-                h.get("required_action", "") for h in (risk.get("hits") or [])
-            )
+            actions = "；".join(h.get("required_action", "") for h in (risk.get("hits") or []))
             cite = f"[{hits[0].get('n', 1)}]" if hits else ""
             return None, (
                 f"（mock 模型·仅验证链路）这是{level}红旗症状，先按制度处置：{actions}。"
@@ -184,11 +196,18 @@ def _agent_next_step(
                     "才能按制度校验随访节点。"
                 )
             return (
-                ToolCall(name="resolve_patient", arguments={"patient_ref": patient_ref}, raw_arguments="{}"),
+                ToolCall(
+                    name="resolve_patient",
+                    arguments={"patient_ref": patient_ref},
+                    raw_arguments="{}",
+                ),
                 "",
             )
         if "resolve_patient" in called and last.get("found") is False:
-            return None, f"没有在系统里找到这位患者（{last.get('reason', '未找到')}），请核对住院号后再试。"
+            return (
+                None,
+                f"没有在系统里找到这位患者（{last.get('reason', '未找到')}），请核对住院号后再试。",
+            )
 
         resolved = _payload_with(messages, "patient_id")
         plan_type = resolved.get("plan_type") or next(
@@ -231,7 +250,11 @@ def _agent_next_step(
                 "请确认是否调整方案；我不会为了让校验通过而自行改动医护的安排。"
             )
 
-        if has(CREATE_DRAFT_NAME) and CREATE_DRAFT_NAME not in called and check_payload.get("rule_ticket"):
+        if (
+            has(CREATE_DRAFT_NAME)
+            and CREATE_DRAFT_NAME not in called
+            and check_payload.get("rule_ticket")
+        ):
             return (
                 ToolCall(
                     name=CREATE_DRAFT_NAME,
@@ -257,7 +280,9 @@ def _agent_next_step(
     # ---------------- 轨迹 A：只查规范，不碰业务工具 ----------------
     if has("search_policy") and "search_policy" not in called:
         return (
-            ToolCall(name="search_policy", arguments={"query": user_content[:80]}, raw_arguments="{}"),
+            ToolCall(
+                name="search_policy", arguments={"query": user_content[:80]}, raw_arguments="{}"
+            ),
             "",
         )
 
@@ -288,13 +313,11 @@ def _dialogue_only(user_content: str) -> str:
 def _extract_first_source(user_content: str) -> str:
     """从拼好的 user message 里抽出【资料1】的正文，用于回显。"""
     match = re.search(r"【资料1】(.*?)(?:\n\n【资料|\n\n问题：|$)", user_content, re.S)
-    return (match.group(1).strip() if match else "")
+    return match.group(1).strip() if match else ""
 
 
 def _build_mock_answer(messages: list[dict]) -> str:
-    user_content = next(
-        (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
-    )
+    user_content = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
     source = _extract_first_source(user_content)
     if not source:
         return REFUSAL_TEXT

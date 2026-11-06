@@ -11,6 +11,7 @@
   只把 is_active 移走。回滚也不是「把旧记录激活」，而是拿旧正文再存一版——
   否则版本号会倒退，历史顺序就乱了。
 """
+
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
@@ -40,6 +41,4 @@ class PromptTemplate(Base):
     created_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

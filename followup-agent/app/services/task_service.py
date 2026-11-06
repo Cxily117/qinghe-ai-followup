@@ -9,6 +9,7 @@
 可举证性：草稿的 content.ai 里存了 model / prompt_version / latency_ms / raw_args / flags，
 事后能回答「这张草稿是哪一版提示词、哪个模型、在第几毫秒生成了什么」。
 """
+
 from __future__ import annotations
 
 import logging
@@ -44,6 +45,8 @@ def _grounded(value: str, sources: list[str]) -> bool:
     if not needle:
         return False
     return any(needle in _squash(s) for s in sources)
+
+
 DEFAULT_PLAN = "常规术后随访"
 VALID_CHANNELS = {"phone", "sms", "wecom", "outpatient"}
 SCHEDULE_HOUR = 9  # 随访任务统一排在上午 9 点，避免出现 03:17 这种没人执行的计划
@@ -117,7 +120,12 @@ def _clean_items(raw_items: list) -> list[dict]:
             merged[offset]["name"] = f"{merged[offset]['name']} + {name}"[:64]
             merged[offset]["notes"] = (merged[offset]["notes"] + "；" + notes).strip("；")[:200]
         else:
-            merged[offset] = {"name": name, "offset_days": offset, "channel": channel, "notes": notes}
+            merged[offset] = {
+                "name": name,
+                "offset_days": offset,
+                "channel": channel,
+                "notes": notes,
+            }
 
     return [merged[k] for k in sorted(merged)][:MAX_ITEMS]
 
@@ -128,9 +136,7 @@ def _schedule_at(base_date: date, first_offset: int) -> datetime:
     return naive.astimezone()
 
 
-def normalize(
-    arguments: dict, *, base_date: date, patient_hint: str | None
-) -> dict:
+def normalize(arguments: dict, *, base_date: date, patient_hint: str | None) -> dict:
     """把工具入参变成可落库的 content；不合法就抛 TaskInputError。"""
     patient_ref = str(arguments.get("patient_ref") or "").strip() or (patient_hint or "").strip()
     if not patient_ref:
@@ -181,18 +187,22 @@ async def _find_similar_draft(
     """24 小时内同一患者+同一方案+同样节点的草稿，视为重复点击，直接复用。"""
     since = datetime.now() - DEDUP_WINDOW
     rows = (
-        await db.execute(
-            select(FollowupTaskDraft)
-            .where(
-                FollowupTaskDraft.created_by == user_id,
-                FollowupTaskDraft.patient_ref == patient_ref,
-                FollowupTaskDraft.plan_type == plan_type,
-                FollowupTaskDraft.status == "draft",
+        (
+            await db.execute(
+                select(FollowupTaskDraft)
+                .where(
+                    FollowupTaskDraft.created_by == user_id,
+                    FollowupTaskDraft.patient_ref == patient_ref,
+                    FollowupTaskDraft.plan_type == plan_type,
+                    FollowupTaskDraft.status == "draft",
+                )
+                .order_by(FollowupTaskDraft.id.desc())
+                .limit(5)
             )
-            .order_by(FollowupTaskDraft.id.desc())
-            .limit(5)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for row in rows:
         # 库里可能是无时区的 naive 值（SQLite），统一去掉时区再比，避免 TypeError
         created = row.created_at.replace(tzinfo=None) if row.created_at else None
@@ -250,7 +260,8 @@ async def generate_draft(
     call = calls[0] if calls else None
     if call is None or call.name != CREATE_TASK_DRAFT_NAME:
         raise TaskExtractError(
-            "模型没有按要求调用任务生成工具" + (f"（它回复了：{result.text[:120]}）" if result.text else "")
+            "模型没有按要求调用任务生成工具"
+            + (f"（它回复了：{result.text[:120]}）" if result.text else "")
         )
 
     # ---- 患者标识必须"有出处" ----
@@ -323,7 +334,10 @@ async def generate_draft(
     await db.refresh(draft)
     logger.info(
         "任务草稿已生成 id=%s patient=%s items=%s model=%s",
-        draft.id, draft.patient_ref, len(content["items"]), result.model,
+        draft.id,
+        draft.patient_ref,
+        len(content["items"]),
+        result.model,
     )
     return draft, False
 
@@ -343,7 +357,12 @@ async def get_draft_for_user(
 
 
 async def confirm(
-    db: AsyncSession, draft: FollowupTaskDraft, *, user_id: int, username: str, payload: TaskConfirmIn
+    db: AsyncSession,
+    draft: FollowupTaskDraft,
+    *,
+    user_id: int,
+    username: str,
+    payload: TaskConfirmIn,
 ) -> FollowupTaskDraft:
     """人工确认：AI 生成的草稿到这里才算成立。
 
@@ -360,9 +379,7 @@ async def confirm(
         items = _clean_items([i.model_dump() for i in payload.items])
         if not items:
             raise TaskInputError("提交的随访节点不合法（需要有 name 与 0-365 的 offset_days）")
-        base = date.fromisoformat(
-            _base_date_from_content(content) or date.today().isoformat()
-        )
+        base = date.fromisoformat(_base_date_from_content(content) or date.today().isoformat())
         for item in items:
             item["due_date"] = (base + timedelta(days=item["offset_days"])).isoformat()
         content["items"] = items
@@ -386,7 +403,9 @@ async def confirm(
     return draft
 
 
-async def cancel(db: AsyncSession, draft: FollowupTaskDraft, *, user_id: int, username: str) -> FollowupTaskDraft:
+async def cancel(
+    db: AsyncSession, draft: FollowupTaskDraft, *, user_id: int, username: str
+) -> FollowupTaskDraft:
     if draft.status == "confirmed":
         raise TaskInputError("已确认的任务不能取消，请走任务撤销流程（D6）")
     content = dict(draft.content or {})

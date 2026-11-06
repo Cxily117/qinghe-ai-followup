@@ -6,6 +6,7 @@
 参数 days：统计窗口天数，钳制在 1-365，默认 30——
 报表允许看任意窗口，但不允许一次拉全年以上把库拖死。
 """
+
 from fastapi import APIRouter, Query, Response
 
 from app.core.deps import AdminUser, DbDep
@@ -30,7 +31,5 @@ async def summary_csv(admin: AdminUser, db: DbDep, days: int = Query(30, ge=1, l
     return Response(
         content=b"\xef\xbb\xbf" + csv_text.encode("utf-8"),
         media_type="text/csv; charset=utf-8",
-        headers={
-            "Content-Disposition": f'attachment; filename="qc-report-{days}d.csv"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="qc-report-{days}d.csv"'},
     )

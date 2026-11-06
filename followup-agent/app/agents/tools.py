@@ -15,6 +15,7 @@
 阶段 4 的增量：工具不只是 schema，还带 `ToolSpec` 元数据（分类 / 解锁条件 / 单轮次数上限）。
 下发哪几个由 `runtime.available_schemas()` 按运行状态决定，**没解锁的工具模型看不见**。
 """
+
 from __future__ import annotations
 
 from app.agents.runtime import (
@@ -56,7 +57,10 @@ CREATE_TASK_DRAFT = {
                     "items": {
                         "type": "object",
                         "properties": {
-                            "name": {"type": "string", "description": "随访项名称，如「电话随访+切口评估」"},
+                            "name": {
+                                "type": "string",
+                                "description": "随访项名称，如「电话随访+切口评估」",
+                            },
                             "offset_days": {
                                 "type": "integer",
                                 "description": "相对出院日（第 0 天）的天数，取值 0-365",
@@ -125,7 +129,9 @@ LIST_EXISTING_TASKS = {
         "description": "查询该患者已经排过的随访节点，避免重复排程与漏排。",
         "parameters": {
             "type": "object",
-            "properties": {"patient_id": {"type": "string", "description": "resolve_patient 返回的 patient_id"}},
+            "properties": {
+                "patient_id": {"type": "string", "description": "resolve_patient 返回的 patient_id"}
+            },
             "required": ["patient_id"],
         },
     },
@@ -158,7 +164,10 @@ CHECK_RULE = {
         "parameters": {
             "type": "object",
             "properties": {
-                "patient_id": {"type": "string", "description": "resolve_patient 返回的 patient_id"},
+                "patient_id": {
+                    "type": "string",
+                    "description": "resolve_patient 返回的 patient_id",
+                },
                 "plan_type": {"type": "string", "description": "随访方案名称"},
                 "items": {
                     "type": "array",
@@ -190,7 +199,10 @@ ASSESS_RED_FLAG = {
         "parameters": {
             "type": "object",
             "properties": {
-                "patient_id": {"type": "string", "description": "resolve_patient 返回的 patient_id"},
+                "patient_id": {
+                    "type": "string",
+                    "description": "resolve_patient 返回的 patient_id",
+                },
                 "symptoms": {"type": "string", "description": "医护描述的症状原文，不要改写"},
             },
             "required": ["symptoms"],
@@ -207,7 +219,10 @@ ESCALATE = {
             "type": "object",
             "properties": {
                 "ticket": {"type": "string", "description": "risk_ticket 或 rule_ticket 原文"},
-                "reason": {"type": "string", "description": "升级原因，须写明命中了哪条制度/哪个症状"},
+                "reason": {
+                    "type": "string",
+                    "description": "升级原因，须写明命中了哪条制度/哪个症状",
+                },
             },
             "required": ["ticket", "reason"],
         },
@@ -280,7 +295,9 @@ TOOL_SPECS: dict[str, ToolSpec] = {
         name="escalate_to_clinician",
         schema=ESCALATE,
         category=WRITE,
-        unlock=lambda s: _has_risk_ticket(s) or _has_rule_ticket(s) or s.called("check_followup_rule"),
+        unlock=lambda s: (
+            _has_risk_ticket(s) or _has_rule_ticket(s) or s.called("check_followup_rule")
+        ),
         ticket_kind="risk",
         label="升级主管医生",
     ),
@@ -310,7 +327,13 @@ ALL_TOOLS = (
 
 # strict 模式（AGENT_MODE=strict）：只下发只读工具，写操作全部留给人。
 # 这是上线初期的保险丝——出问题一个环境变量就能退回"问答机器人"。
-_STRICT_TOOLS = ("resolve_patient", "search_policy", "list_existing_tasks", "assess_red_flag", "handoff_to_human")
+_STRICT_TOOLS = (
+    "resolve_patient",
+    "search_policy",
+    "list_existing_tasks",
+    "assess_red_flag",
+    "handoff_to_human",
+)
 
 
 def enabled_for_mode(mode: str) -> tuple[str, ...]:
@@ -339,7 +362,7 @@ def available_specs(state: RunState, *, enabled: tuple[str, ...] | None = None) 
         try:
             if not spec.unlock(state):
                 continue
-        except Exception:  # 解锁条件本身写错时，宁可不下发也不要放行写操作
+        except Exception:  # noqa: BLE001 —— 解锁条件本身写错时，宁可不下发也不要放行写操作
             continue
         specs.append(spec)
     return specs

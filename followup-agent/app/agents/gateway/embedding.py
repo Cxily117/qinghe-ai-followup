@@ -10,6 +10,7 @@
 维度守卫：写入库的向量维度必须等于 settings.embed_dim（PG 的 vector(1024) 会硬性拒绝
          维度不符的写入），所以这里在调用后立刻校验，出错时给出可操作的提示。
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -71,7 +72,9 @@ class EmbeddingClient:
 
     async def _embed_openai(self, texts: list[str]) -> np.ndarray:
         if not self.api_key:
-            raise RuntimeError("LLM_API_KEY 未配置，无法调用真实 embedding（可设 EMBED_PROVIDER=mock）")
+            raise RuntimeError(
+                "LLM_API_KEY 未配置，无法调用真实 embedding（可设 EMBED_PROVIDER=mock）"
+            )
 
         vectors: list[list[float]] = []
         headers = {"Authorization": f"Bearer {self.api_key}"}

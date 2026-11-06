@@ -1,4 +1,5 @@
 """智能体相关 DTO。"""
+
 from __future__ import annotations
 
 from typing import Literal
@@ -16,5 +17,7 @@ class AgentConfirmIn(BaseModel):
     允许在确认接口里改参数，等于绕过了刚刚的合规校验。
     """
 
-    action: Literal["confirm", "cancel"] = Field("confirm", description="confirm=保存草稿；cancel=取消")
+    action: Literal["confirm", "cancel"] = Field(
+        "confirm", description="confirm=保存草稿；cancel=取消"
+    )
     note: str = Field("", max_length=200, description="确认备注，会记入草稿的 confirm 块")

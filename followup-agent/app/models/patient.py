@@ -14,6 +14,7 @@
   manual= 管理员在后台手工录入
   his   = 从院内系统同步（预留，接入时写入）
 """
+
 from datetime import date, datetime
 
 from sqlalchemy import Date, DateTime, String, func
@@ -38,9 +39,7 @@ class Patient(Base):
     status: Mapped[str] = mapped_column(String(16), default="active", index=True)
     source: Mapped[str] = mapped_column(String(16), default="manual")
     note: Mapped[str] = mapped_column(String(200), default="")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

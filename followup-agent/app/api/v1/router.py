@@ -1,4 +1,5 @@
 """v1 路由聚合：新增模块只需在此登记一行。"""
+
 from fastapi import APIRouter
 
 from app.api.v1 import agent, audit, auth, chat, knowledge, prompts, reports, tasks

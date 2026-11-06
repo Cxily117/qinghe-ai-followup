@@ -1,4 +1,5 @@
 """提示词相关 DTO。"""
+
 from pydantic import BaseModel, Field
 
 

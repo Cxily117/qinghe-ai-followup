@@ -9,6 +9,7 @@
 隐私边界：`args_redacted` 存的是**脱敏后**的入参，患者姓名与住院号只留掩码；
 原始入参不入库，避免审计表变成第二个 PHI 泄露面。
 """
+
 from datetime import datetime
 
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, func
@@ -40,9 +41,7 @@ class AgentRun(Base):
     answer_chars: Mapped[int] = mapped_column(Integer, default=0)
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
     error_code: Mapped[str] = mapped_column(String(48), default="")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class AgentToolCall(Base):
@@ -51,9 +50,7 @@ class AgentToolCall(Base):
     __tablename__ = "agent_tool_calls"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    run_id: Mapped[int] = mapped_column(
-        ForeignKey("agent_runs.id", ondelete="CASCADE"), index=True
-    )
+    run_id: Mapped[int] = mapped_column(ForeignKey("agent_runs.id", ondelete="CASCADE"), index=True)
     seq: Mapped[int] = mapped_column(Integer, default=0)
     # 这一轮模型做了什么：tool_call（调工具）/ blocked（调了未下发的工具）
     # / final（给出答复、本轮无工具）/ confirm（写操作被闸门拦下、等待人工确认）
@@ -69,9 +66,7 @@ class AgentToolCall(Base):
     result_digest: Mapped[str] = mapped_column(String(256), default="")
     ticket_id: Mapped[str] = mapped_column(String(64), default="")
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class TicketNonce(Base):
@@ -87,12 +82,8 @@ class TicketNonce(Base):
     nonce: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     kind: Mapped[str] = mapped_column(String(24), default="")
     run_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class AgentConfirmation(Base):
@@ -111,9 +102,7 @@ class AgentConfirmation(Base):
     __tablename__ = "agent_confirmations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    run_id: Mapped[int] = mapped_column(
-        ForeignKey("agent_runs.id", ondelete="CASCADE"), index=True
-    )
+    run_id: Mapped[int] = mapped_column(ForeignKey("agent_runs.id", ondelete="CASCADE"), index=True)
     # confirmed|cancelled|expired；pending 是常态
     status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
     # 待落库的完整草稿参数（已归一化：日期算好、渠道白名单、节点排序去重）
@@ -125,10 +114,6 @@ class AgentConfirmation(Base):
     # 落库后的草稿 id（仅 confirmed 有值）
     draft_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    decided_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     decided_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

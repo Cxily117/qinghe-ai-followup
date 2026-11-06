@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """统一启动入口：读 PORT 环境变量（部署平台约定），本地默认 8000。
 
 为什么不用 uvicorn 命令行直接写死端口：
@@ -9,6 +8,7 @@
     python run_server.py                       # 本地 8000
     PORT=3000 python run_server.py             # 沙箱/容器注入端口
 """
+
 import os
 
 import uvicorn

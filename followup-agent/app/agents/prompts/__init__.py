@@ -9,6 +9,7 @@
 为什么仍然保留带版本号的 markdown 文件：
   代码评审（diff）看 md 比看数据库行直观，且新环境冷启动要有初始正文。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

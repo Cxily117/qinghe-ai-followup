@@ -1,4 +1,5 @@
 """认证路由：注册 / 登录 / 当前用户 / 退出。"""
+
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from sqlalchemy import select
 
@@ -17,8 +18,12 @@ from app.schemas.auth import (
 router = APIRouter(prefix="/auth", tags=["认证"])
 
 
-@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED,
-             summary="注册用户（医护）")
+@router.post(
+    "/register",
+    response_model=UserOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="注册用户（医护）",
+)
 async def register(payload: UserRegister, db: DbDep):
     exists = (
         await db.execute(select(User).where(User.username == payload.username))
@@ -54,9 +59,7 @@ async def login(payload: UserLogin, request: Request, response: Response, db: Db
     ).scalar_one_or_none()
     # 统一提示「用户名或密码错误」，不泄露用户是否存在
     if user is None or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
     if user.status != "active":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账号已停用")
 
@@ -104,9 +107,7 @@ async def change_password(payload: PasswordChange, user: CurrentUser, db: DbDep)
     加 token 版本号并在鉴权时比对，属于后续加固项，此处不为改密码引入新表结构。
     """
     if not verify_password(payload.old_password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="当前密码不正确"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前密码不正确")
     if payload.old_password == payload.new_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="新密码不能与当前密码相同"

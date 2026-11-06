@@ -32,17 +32,18 @@
 - 每轮都产出一条 `RoundRecord`，由调用方落 `agent_tool_calls`。
 - 一轮只执行一个工具调用：顺序约束要求"一步一验证"，并发执行会打乱因果链。
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
 import re
 import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import AsyncIterator, Awaitable, Callable
 
-from app.agents.tools import available_specs, enabled_for_mode
 from app.agents.runtime import RunState
+from app.agents.tools import available_specs, enabled_for_mode
 
 # 院内标识：ZY2026001 / P123456 / A0000123
 _ID_RE = re.compile(r"\b[A-Za-z]{1,3}\d{5,}\b")
@@ -89,9 +90,35 @@ def redact_args(args: dict | None) -> dict:
     return out
 
 
+def _redact_payload(value: object, depth: int = 0) -> object:
+    """递归脱敏工具结果。
+
+    工具返回的结构是嵌套的（`{"found": true, "patient": {"name": "张伟"}}`），
+    只按键名匹配顶层会漏掉里层的姓名——而姓名恰恰是 PHI 里最不该留原文的一项。
+    """
+    if depth > 4:
+        return "<nested>"
+    if isinstance(value, dict):
+        out: dict = {}
+        for k, v in value.items():
+            if isinstance(v, str) and isinstance(k, str) and k.lower() in _MASKED_KEYS:
+                out[k] = redact_arg_value(v)
+            else:
+                out[k] = _redact_payload(v, depth + 1)
+        return out
+    if isinstance(value, list):
+        return [_redact_payload(v, depth + 1) for v in value[:12]]
+    return value
+
+
 def result_digest(payload: dict) -> str:
-    """结果摘要：脱敏后截断。全文不入库（工具结果常是整段制度条文）。"""
-    return mask_ids(json.dumps(payload, ensure_ascii=False))[:250]
+    """结果摘要：脱敏后截断。全文不入库（工具结果常是整段制度条文）。
+
+    注意这里是「脱敏后的摘要」而不是哈希：回放时要能看出工具返回了什么结构，
+    纯 hash 会让排查失去信息。代价是必须真的把 PHI 掩掉——包括嵌套里的 name。
+    """
+    safe = _redact_payload(payload)
+    return mask_ids(json.dumps(safe, ensure_ascii=False))[:250]
 
 
 @dataclass
@@ -176,9 +203,7 @@ class AgentHarness:
                 return
 
             # ---- ① 模型决策 ----
-            result = await self.llm.chat_tools(
-                self.messages, [sp.schema for sp in specs]
-            )
+            result = await self.llm.chat_tools(self.messages, [sp.schema for sp in specs])
             self.model_name = result.model or self.model_name
             note = (result.text or "").strip()
             calls = (result.extra or {}).get("tool_calls") or []
@@ -248,7 +273,7 @@ class AgentHarness:
             started = time.perf_counter()
             try:
                 payload, _ = await self.dispatch(call.name, call.arguments or {})
-            except Exception as exc:  # 工具内部异常不该整轮崩掉：回灌错误让模型换路
+            except Exception as exc:  # noqa: BLE001 —— 工具内部异常不该整轮崩掉：回灌错误让模型换路
                 payload = {"ok": False, "error": "tool_failed", "message": str(exc)[:200]}
             cost_ms = int((time.perf_counter() - started) * 1000)
             self.state.touch(call.name)
@@ -323,9 +348,7 @@ class AgentHarness:
             {
                 "role": "tool",
                 "tool_call_id": call.call_id or f"call_{round_no}",
-                "content": json.dumps(payload, ensure_ascii=False)[
-                    : self.tool_result_chars * 4
-                ],
+                "content": json.dumps(payload, ensure_ascii=False)[: self.tool_result_chars * 4],
             }
         )
 
@@ -360,7 +383,10 @@ def _step_detail(tool: str, payload: dict) -> dict:
             "items": len((payload.get("draft") or {}).get("items") or []),
         }
     if tool == "escalate_to_clinician":
-        return {"escalated": payload.get("escalated", False), "no": payload.get("escalation_no", "")}
+        return {
+            "escalated": payload.get("escalated", False),
+            "no": payload.get("escalation_no", ""),
+        }
     if tool == "handoff_to_human":
         return {"handoff": True}
     return {}

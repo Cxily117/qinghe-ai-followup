@@ -15,6 +15,7 @@
    宁可让管理员在页面上看到"正在使用兜底模板"的黄色提示，
    也不能把空字符串当系统提示词发出去——那等于把模型的护栏全撤了。
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -45,7 +46,7 @@ def _sha(text: str) -> str:
 class PromptSnapshot:
     """问答时实际使用的提示词快照（不可变，便于直接塞进 meta）。"""
 
-    __slots__ = ("name", "version", "text", "sha", "source", "updated_at")
+    __slots__ = ("name", "sha", "source", "text", "updated_at", "version")
 
     def __init__(self, name: str, version: int, text: str, sha: str, source: str, updated_at=None):
         self.name = name
@@ -96,7 +97,7 @@ async def get_active(db: AsyncSession, name: str = "policy_qa") -> PromptSnapsho
     except FileNotFoundError:
         text = default_text(name)
         if not text:
-            raise AppError("PROMPT_NOT_FOUND")
+            raise AppError("PROMPT_NOT_FOUND") from None
         logger.warning("提示词 %s 无库内版本且无 md 文件，使用内置默认正文", name)
         return PromptSnapshot(name, 1, text, _sha(text), "file_fallback")
 
@@ -132,7 +133,9 @@ def validate(name: str, content: str) -> str:
 
 async def _next_version(db: AsyncSession, name: str) -> int:
     current = (
-        await db.execute(select(func.max(PromptTemplate.version)).where(PromptTemplate.name == name))
+        await db.execute(
+            select(func.max(PromptTemplate.version)).where(PromptTemplate.name == name)
+        )
     ).scalar()
     return int(current or 0) + 1
 
@@ -203,21 +206,35 @@ async def list_versions(db: AsyncSession, name: str, limit: int = 50) -> list[Pr
                 .order_by(PromptTemplate.version.desc())
                 .limit(limit)
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
 
 
 async def summary(db: AsyncSession) -> list[dict]:
     """模板概览：给管理页左侧列表用。"""
     rows = (
-        await db.execute(select(PromptTemplate).order_by(PromptTemplate.name, PromptTemplate.version))
-    ).scalars().all()
+        (
+            await db.execute(
+                select(PromptTemplate).order_by(PromptTemplate.name, PromptTemplate.version)
+            )
+        )
+        .scalars()
+        .all()
+    )
 
     grouped: dict[str, dict] = {}
     for row in rows:
         item = grouped.setdefault(
             row.name,
-            {"name": row.name, "versions": 0, "active_version": None, "updated_at": None, "active": None},
+            {
+                "name": row.name,
+                "versions": 0,
+                "active_version": None,
+                "updated_at": None,
+                "active": None,
+            },
         )
         item["versions"] += 1
         if row.is_active:
@@ -237,7 +254,9 @@ async def ensure_seed(db: AsyncSession) -> None:
     """
     for name in MANAGED_PROMPTS:
         exists = (
-            await db.execute(select(func.count(PromptTemplate.id)).where(PromptTemplate.name == name))
+            await db.execute(
+                select(func.count(PromptTemplate.id)).where(PromptTemplate.name == name)
+            )
         ).scalar()
         if exists:
             continue

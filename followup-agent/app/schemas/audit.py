@@ -1,4 +1,5 @@
 """审计相关 DTO。"""
+
 from typing import Literal
 
 from pydantic import BaseModel, Field

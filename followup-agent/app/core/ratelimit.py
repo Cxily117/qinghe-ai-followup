@@ -16,6 +16,7 @@
     豁免判断用"生效 IP"，所以测试里带一个假 XFF 就能绕过豁免验证 429。
   - 只拦"花钱"和"可暴力破解"的路径，静态资源、后台页面一律不拦。
 """
+
 from __future__ import annotations
 
 import time
@@ -146,7 +147,9 @@ def install_rate_limit(app: FastAPI) -> None:
         if user_rule is not None:
             key = _user_key(request)
             if key:
-                ok, wait = _WINDOW.check(f"{request.url.path}|{key}", user_rule.limit, user_rule.window)
+                ok, wait = _WINDOW.check(
+                    f"{request.url.path}|{key}", user_rule.limit, user_rule.window
+                )
                 if not ok:
                     retry, blocked_by = wait, "user"
 

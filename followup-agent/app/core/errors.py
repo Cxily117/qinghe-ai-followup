@@ -12,6 +12,7 @@
   1. 响应头发出前的错误 → HTTP 状态码 + 本 envelope；
   2. SSE 已经开始输出后的错误 → 只能走 `event: error`，code 保持同名。
 """
+
 from __future__ import annotations
 
 import logging
@@ -141,9 +142,11 @@ def _body(code: str, message: str, request_id: str, extra: dict | None = None) -
 
 def _request_id(request: Request) -> str:
     """优先用上游传入的 X-Request-ID（便于网关串联），否则生成一个短 id。"""
-    return getattr(request.state, "request_id", None) or request.headers.get(
-        "X-Request-ID"
-    ) or uuid.uuid4().hex[:8]
+    return (
+        getattr(request.state, "request_id", None)
+        or request.headers.get("X-Request-ID")
+        or uuid.uuid4().hex[:8]
+    )
 
 
 def _translate_validation(exc: RequestValidationError) -> tuple[str, str]:
@@ -261,9 +264,11 @@ def register_exception_handlers(app: FastAPI) -> None:
         detail = exc.detail if isinstance(exc.detail, str) and exc.detail else None
         # 已有中文 detail（如"会话不存在或无权访问"）直接沿用；
         # Starlette 自带的 "Not Found" / "Method Not Allowed" 是英文，换成中文默认值
-        message = detail if detail and _has_chinese(detail) else ERRORS.get(
-            code, (exc.status_code, "请求失败")
-        )[1]
+        message = (
+            detail
+            if detail and _has_chinese(detail)
+            else ERRORS.get(code, (exc.status_code, "请求失败"))[1]
+        )
         if _wants_admin_html(request):
             return _admin_error_page(exc.status_code, message, rid)
         # 浏览器直接访问不存在的页面 → 引导页；API/后台仍走原逻辑

@@ -14,12 +14,13 @@
   换供应商时「生成任务草稿」这条链路同样不该重写；而且 mock 也要能返回工具调用，
   否则离线环境下 D5 的整条落库链路就没法验证。
 """
+
 from __future__ import annotations
 
 import time
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import AsyncIterator
 
 from app.core.config import get_settings
 
@@ -62,9 +63,7 @@ class LLMProvider(ABC):
         """一次性返回完整回答。"""
 
     @abstractmethod
-    def stream(
-        self, messages: list[dict], temperature: float | None = None
-    ) -> AsyncIterator[str]:
+    def stream(self, messages: list[dict], temperature: float | None = None) -> AsyncIterator[str]:
         """流式返回增量文本。注意：这是普通函数，返回 async generator。"""
 
     async def chat_tools(

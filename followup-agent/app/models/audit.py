@@ -8,9 +8,10 @@
   3. 自动预筛（flags）与人工标记分开存：前者是 messages.meta 里的机器判断，
      后者是本表里的人签字。两者不能混，否则报表里分不清"AI 觉得危险"和"人确认危险"。
 """
+
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base

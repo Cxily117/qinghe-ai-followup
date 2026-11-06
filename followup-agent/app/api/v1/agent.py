@@ -9,6 +9,7 @@
 `/agent/runs/{uid}` 是给审计用的：逐轮回放调了什么工具、带了哪张票据、返回什么摘要。
 医护本人可看自己的；管理员可看全部。
 """
+
 from __future__ import annotations
 
 import json
@@ -36,7 +37,9 @@ SSE_HEADERS = {
 
 
 def _sse(event: dict) -> str:
-    return f"event: {event.get('type', 'message')}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+    return (
+        f"event: {event.get('type', 'message')}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+    )
 
 
 @router.post("/chat", summary="智能体问答（SSE，含工具步骤事件）")
@@ -82,20 +85,28 @@ async def get_run(run_uid: str, user: CurrentUser, db: DbDep):
         raise AppError("AGENT_RUN_NOT_FOUND")  # 404 不暴露存在性
 
     calls = (
-        await db.execute(
-            select(AgentToolCall)
-            .where(AgentToolCall.run_id == run.id)
-            .order_by(AgentToolCall.seq.asc())
+        (
+            await db.execute(
+                select(AgentToolCall)
+                .where(AgentToolCall.run_id == run.id)
+                .order_by(AgentToolCall.seq.asc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     confirmations = (
-        await db.execute(
-            select(AgentConfirmation)
-            .where(AgentConfirmation.run_id == run.id)
-            .order_by(AgentConfirmation.id.asc())
+        (
+            await db.execute(
+                select(AgentConfirmation)
+                .where(AgentConfirmation.run_id == run.id)
+                .order_by(AgentConfirmation.id.asc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return {
         "run_uid": run.run_uid,
@@ -154,9 +165,7 @@ async def get_run(run_uid: str, user: CurrentUser, db: DbDep):
 
 
 @router.post("/runs/{run_uid}/confirm", summary="确认/取消待落库的随访草稿")
-async def confirm_run(
-    run_uid: str, payload: AgentConfirmIn, user: CurrentUser, db: DbDep
-):
+async def confirm_run(run_uid: str, payload: AgentConfirmIn, user: CurrentUser, db: DbDep):
     """只有这里能把智能体生成的草稿写进 `followup_task_drafts`。
 
     模型在产出 `confirm_required` 时循环已终止，没有机会调用本接口；

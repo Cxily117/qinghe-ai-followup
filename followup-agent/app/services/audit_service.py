@@ -12,6 +12,7 @@
   会话量级在千级以内完全够用；生产切 PG 后应改为在 sessions 上冗余 risk_flags 列
   并建 GIN 索引，这一点已记在 README 的已知限制里。
 """
+
 from __future__ import annotations
 
 import logging
@@ -67,7 +68,9 @@ async def list_staff(db: AsyncSession) -> list[User]:
             await db.execute(
                 select(User).where(User.role == "staff").order_by(User.id.asc()).limit(200)
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
 
 
@@ -78,8 +81,9 @@ async def _flags_by_session(db: AsyncSession, session_ids: list[int]) -> dict[in
 
     rows = (
         await db.execute(
-            select(Message.session_id, Message.meta, Message.created_at)
-            .where(Message.session_id.in_(session_ids), Message.role == "assistant")
+            select(Message.session_id, Message.meta, Message.created_at).where(
+                Message.session_id.in_(session_ids), Message.role == "assistant"
+            )
         )
     ).all()
 
@@ -92,19 +96,25 @@ async def _flags_by_session(db: AsyncSession, session_ids: list[int]) -> dict[in
     return agg
 
 
-async def _marks_by_session(db: AsyncSession, session_ids: list[int]) -> dict[int, list[ChatAuditMark]]:
+async def _marks_by_session(
+    db: AsyncSession, session_ids: list[int]
+) -> dict[int, list[ChatAuditMark]]:
     if not session_ids:
         return {}
     rows = (
-        await db.execute(
-            select(ChatAuditMark)
-            .where(
-                ChatAuditMark.session_id.in_(session_ids),
-                ChatAuditMark.revoked_at.is_(None),
+        (
+            await db.execute(
+                select(ChatAuditMark)
+                .where(
+                    ChatAuditMark.session_id.in_(session_ids),
+                    ChatAuditMark.revoked_at.is_(None),
+                )
+                .order_by(ChatAuditMark.id.desc())
             )
-            .order_by(ChatAuditMark.id.desc())
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     out: dict[int, list[ChatAuditMark]] = {}
     for mark in rows:
         out.setdefault(mark.session_id, []).append(mark)
@@ -211,7 +221,9 @@ async def session_detail(db: AsyncSession, session_id: int) -> dict:
             await db.execute(
                 select(Message).where(Message.session_id == session_id).order_by(Message.id.asc())
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     marks = list(
         (
@@ -220,16 +232,16 @@ async def session_detail(db: AsyncSession, session_id: int) -> dict:
                 .where(ChatAuditMark.session_id == session_id)
                 .order_by(ChatAuditMark.id.desc())
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
 
     # 标记人姓名：一次查出，避免模板里逐条再查库
     operator_ids = {m.marked_by for m in marks} | {m.revoked_by for m in marks if m.revoked_by}
     operators = {}
     if operator_ids:
-        for u in (
-            await db.execute(select(User).where(User.id.in_(operator_ids)))
-        ).scalars().all():
+        for u in (await db.execute(select(User).where(User.id.in_(operator_ids)))).scalars().all():
             operators[u.id] = u.full_name or u.username
 
     out_messages = []
@@ -248,7 +260,9 @@ async def session_detail(db: AsyncSession, session_id: int) -> dict:
                 "model": meta.get("model"),
                 "prompt_version": meta.get("prompt_version"),
                 "latency_ms": meta.get("latency_ms"),
-                "mark": next((mk for mk in marks if mk.message_id == m.id and not mk.revoked_at), None),
+                "mark": next(
+                    (mk for mk in marks if mk.message_id == m.id and not mk.revoked_at), None
+                ),
             }
         )
 
@@ -280,9 +294,7 @@ async def session_detail(db: AsyncSession, session_id: int) -> dict:
             for mk in marks
         ],
         "active_marks": [mk for mk in marks if mk.revoked_at is None],
-        "suspected": any(
-            f in RISK_FLAGS for msg in out_messages for f in msg["flags"]
-        ),
+        "suspected": any(f in RISK_FLAGS for msg in out_messages for f in msg["flags"]),
     }
 
 
@@ -352,9 +364,7 @@ async def revoke_mark(db: AsyncSession, *, mark_id: int, admin_id: int) -> ChatA
 async def stats(db: AsyncSession) -> dict:
     """概览页卡片：近 7 日问答量、待复核高危、已标记数。"""
     since = datetime.combine(date.today(), time.min)
-    total_sessions = int(
-        (await db.execute(select(func.count(ChatSession.id)))).scalar() or 0
-    )
+    total_sessions = int((await db.execute(select(func.count(ChatSession.id)))).scalar() or 0)
     total_messages = int(
         (
             await db.execute(

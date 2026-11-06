@@ -17,6 +17,7 @@
 注意：规则只覆盖"排期结构"，不覆盖临床适应症。红旗症状走 assess_red_flag，
 两者互不替代。
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -167,7 +168,9 @@ def coerce_items(raw_items: object) -> list[dict]:
     return items
 
 
-def evaluate(plan_type: str, raw_items: object, *, evidence_ids: list[int] | None = None) -> RuleVerdict:
+def evaluate(
+    plan_type: str, raw_items: object, *, evidence_ids: list[int] | None = None
+) -> RuleVerdict:
     """逐条判定。evidence_ids = 本次校验引用的制度切片 id（用于把结论钉在条文上）。"""
     items = coerce_items(raw_items)
     profile, known = match_profile(plan_type)

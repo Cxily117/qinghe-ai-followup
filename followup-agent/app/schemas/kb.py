@@ -1,4 +1,5 @@
 """知识库相关 DTO。"""
+
 from pydantic import BaseModel
 
 

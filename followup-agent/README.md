@@ -23,6 +23,42 @@ uvicorn app.main:app --reload # http://127.0.0.1:8000/docs
 默认 `LLM_PROVIDER=mock` / `EMBED_PROVIDER=mock`：**没有 API Key 也能跑通整条链路**
 （mock 的向量无语义，回答是回显式的，只用于验证管道）。
 
+## 工程规范（lint / 测试 / CI）
+
+规范不靠"大家记得"，靠三条可执行的命令。
+
+```bash
+make install   # 装运行 + 开发依赖（requirements.txt + requirements-dev.txt）
+make check     # 等价于 CI：lint + 单测 + 格式校验
+make fmt       # 自动修可修的问题并格式化
+make smoke     # 端到端冒烟（需先 make run；会真调模型）
+```
+
+**规则写在哪**：全部在 `pyproject.toml`，包括行宽、启用的规则集、豁免项。
+
+- 启用 `E/W/F/I/UP/B/BLE/ISC/C4/RUF`，其中 `ISC`（隐式字符串拼接）值得单独说：
+  集合或元组里少一个逗号，两个字符串会静默合并成一个，代码照跑、结果全错——这类事故只能靠工具挡。
+- 刻意 `ignore` 三条：中文全角标点（`RUF001-003`，中文注释必然触发）、行宽（`E501`，交给格式化器）、
+  `B008`（FastAPI 的 `Depends()` 必须写在默认值里）。
+- 每个 `except Exception` 都带 `# noqa: BLE001 —— 原因`：不是禁止兜底，而是要求**说清为什么兜**。
+
+**测试分两层，不要混**：
+
+| 层 | 命令 | 依赖 | 跑多久 | 覆盖什么 |
+|---|---|---|---|---|
+| 单元测试 | `make test` | 无模型、无网络、无数据库 | ~2 秒 | 规则引擎、输出护栏、脱敏、令牌、限流窗口、生产配置自检 |
+| 端到端冒烟 | `make smoke` | 真模型 + 运行中的服务 | ~2 分钟 | 30 段 103 条断言，全链路 |
+
+单测只测"纯逻辑"，所以能在 CI 里秒过；需要真实模型的行为（回答质量、引用、工具选择）
+交给冒烟，不塞进单测——否则 CI 会因为模型抖动而随机变红，最后没人看了。
+
+**提交前**：`pre-commit install`。之后每次 commit 自动跑 ruff 与格式检查，
+另有 `detect-private-key` 防止 Key 混进提交（这条比什么规范都值钱）。
+
+**CI 做什么**（`.github/workflows/ci.yml`）：静态检查 → 格式一致性 → `alembic upgrade head`
+能建库 → 单测 → 应用可导入。故意**不在 CI 里跑冒烟**：它花钱、受网络与模型版本影响，
+放在发布前手动执行更合适。
+
 ## 接真实模型（零代码改动，只改环境变量）
 
 ```bash
@@ -517,6 +553,11 @@ followup-agent/
 ├── scripts/reindex_embeddings.py # ★ 换 embedding 后重建切片向量
 ├── scripts/cleanup_test_data.py  # ★ 测试账号清理（默认预演，--apply 才删，带管理员护栏）
 ├── scripts/archive_audit.py      # ★ 审计冷归档（在线窗口 + sha256 + manifest 留痕）
+├── tests/                    # ★ 单元测试：规则/护栏/脱敏/令牌/限流（不依赖模型，2 秒跑完）
+├── pyproject.toml            # ★ lint、格式化、pytest 的规则集中在这里
+├── Makefile                  # ★ make check / fmt / test / smoke
+├── .pre-commit-config.yaml   # ★ 提交前自动 lint + 禁止私钥入库
+├── requirements-dev.txt      # 开发依赖（ruff / pytest / pre-commit）
 ├── docker-compose.yml        # pgvector/pgvector:pg16（5433）
 └── .env.example
 ```

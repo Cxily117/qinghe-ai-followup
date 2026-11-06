@@ -4,6 +4,7 @@
   POST /chat       SSE 流式（前端主用）
   POST /chat/ask   一次性 JSON（curl 回归、脚本调用、流式不可用时的兜底）
 """
+
 from __future__ import annotations
 
 import json
@@ -62,7 +63,9 @@ async def chat_stream(payload: AskRequest, user: CurrentUser, db: DbDep):
 
 def _sse(event: dict) -> str:
     """统一 SSE 帧格式：event 名 + JSON data（不转义中文，便于人工 curl 排查）。"""
-    return f"event: {event.get('type', 'message')}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+    return (
+        f"event: {event.get('type', 'message')}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+    )
 
 
 @router.post("/ask", response_model=AskResponse, summary="提问（非流式，返回完整回答）")
@@ -72,10 +75,10 @@ async def chat_ask(payload: AskRequest, user: CurrentUser, db: DbDep):
             db, user_id=user.id, question=payload.question, session_id=payload.session_id
         )
     except LookupError as exc:
-        raise AppError("SESSION_NOT_FOUND", str(exc))
+        raise AppError("SESSION_NOT_FOUND", str(exc)) from exc
     except Exception as exc:  # 上游模型失败：502，前端可提示"稍后重试"
         logger.exception("问答失败")
-        raise AppError("LLM_UPSTREAM", f"模型调用失败：{exc}")
+        raise AppError("LLM_UPSTREAM", f"模型调用失败：{exc}") from exc
 
 
 @router.post("/sessions", status_code=status.HTTP_201_CREATED, summary="新建会话")

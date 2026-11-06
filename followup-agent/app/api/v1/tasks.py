@@ -6,6 +6,7 @@
   POST /tasks/{id}/cancel     草稿归属人   draft → cancelled（已确认不可取消，409）
   GET  /tasks/{id}            归属人或管理员
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
@@ -43,7 +44,9 @@ async def list_drafts(user: CurrentUser, db: DbDep, status_filter: str | None = 
     return [_out(r) for r in rows]
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, summary="从对话生成任务草稿（function calling）")
+@router.post(
+    "", status_code=status.HTTP_201_CREATED, summary="从对话生成任务草稿（function calling）"
+)
 async def create_task(payload: TaskDraftGenerateIn, user: CurrentUser, db: DbDep):
     if payload.session_id is None and not (payload.question or "").strip():
         raise HTTPException(
@@ -66,9 +69,13 @@ async def create_task(payload: TaskDraftGenerateIn, user: CurrentUser, db: DbDep
         )
     except task_service.TaskInputError as exc:
         # 信息不足：让医护补，不是服务器故障
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     except task_service.TaskExtractError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"任务抽取失败：{exc}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=f"任务抽取失败：{exc}"
+        ) from exc
 
     data = _out(draft)
     data["reused"] = reused  # 24h 内同患者同节点重复提交：复用旧草稿，避免列表刷出重复卡片
@@ -102,7 +109,9 @@ async def confirm_draft(draft_id: int, payload: TaskConfirmIn, user: CurrentUser
             db, draft, user_id=user.id, username=user.username, payload=payload
         )
     except task_service.TaskInputError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     return _out(draft)
 
 
@@ -116,5 +125,5 @@ async def cancel_draft(draft_id: int, user: CurrentUser, db: DbDep):
     try:
         draft = await task_service.cancel(db, draft, user_id=user.id, username=user.username)
     except task_service.TaskInputError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return _out(draft)

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """三条典型轨迹的端到端验证（阶段 4 · P2/P3）。
 
 对应文档：`docs/agent-trajectories.md`
@@ -15,6 +14,7 @@
     python scripts/trajectory_test.py --base-url http://127.0.0.1:8000
 退出码 0 = 三条轨迹全部符合预期。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -110,7 +110,7 @@ def main() -> int:
         from app.core.config import get_settings
 
         provider = get_settings().llm_provider
-    except Exception as exc:  # 读不到配置就按 mock 处理（老环境仍可跑）
+    except Exception as exc:  # noqa: BLE001 —— 读不到配置就按 mock 处理（老环境仍可跑）
         print(f"（无法读取配置，按 mock 处理：{exc}）")
         provider = "mock"
     if provider != "mock" and not args.force:
@@ -146,37 +146,58 @@ def main() -> int:
         # 轨迹 A：只查规范，不调用业务工具
         # ================================================================
         print("\n[A] 「心梗患者出院 30 天随访要问哪些内容」")
-        sid_a = c.post("/api/v1/chat/sessions", headers={"Authorization": f"Bearer {nurse}"}, json={}).json()["id"]
+        sid_a = c.post(
+            "/api/v1/chat/sessions", headers={"Authorization": f"Bearer {nurse}"}, json={}
+        ).json()["id"]
         ev_a = sse_post(
-            c, "/api/v1/agent/chat", nurse,
+            c,
+            "/api/v1/agent/chat",
+            nurse,
             {"session_id": sid_a, "question": "心梗患者出院 30 天随访要问哪些内容？"},
         )
         seq_a = tools_of(ev_a)
         ok &= check(seq_a == ["search_policy"], f"工具序列={seq_a}（应为 ['search_policy']）")
-        ok &= check("resolve_patient" not in seq_a, "未调用 resolve_patient（无患者上下文，不强行解析）")
+        ok &= check(
+            "resolve_patient" not in seq_a, "未调用 resolve_patient（无患者上下文，不强行解析）"
+        )
         ok &= check(
             not any(t in seq_a for t in ("check_followup_rule", "create_followup_task_draft")),
             "未触发任何写操作或合规校验",
         )
         done_a = done_of(ev_a)
-        ok &= check(bool(done_a.get("citations")), f"带引用回答：{len(done_a.get('citations') or [])} 条")
+        ok &= check(
+            bool(done_a.get("citations")), f"带引用回答：{len(done_a.get('citations') or [])} 条"
+        )
         ok &= check(done_a.get("status") == "succeeded", f"run 状态={done_a.get('status')}")
 
         # ================================================================
         # 轨迹 B：新建随访（解析 → 检索 → 校验 → 生成草稿 → 等确认 → 保存）
         # ================================================================
         print("\n[B] 「帮我新建这位冠心病出院患者的随访记录」")
-        sid_b = c.post("/api/v1/chat/sessions", headers={"Authorization": f"Bearer {nurse}"}, json={}).json()["id"]
+        sid_b = c.post(
+            "/api/v1/chat/sessions", headers={"Authorization": f"Bearer {nurse}"}, json={}
+        ).json()["id"]
         ev_b = sse_post(
-            c, "/api/v1/agent/chat", nurse,
-            {"session_id": sid_b, "question": "帮我新建这位冠心病出院患者（住院号 ZY2026004）的随访记录"},
+            c,
+            "/api/v1/agent/chat",
+            nurse,
+            {
+                "session_id": sid_b,
+                "question": "帮我新建这位冠心病出院患者（住院号 ZY2026004）的随访记录",
+            },
         )
         seq_b = tools_of(ev_b)
-        expect_b = ["resolve_patient", "search_policy", "check_followup_rule", "create_followup_task_draft"]
+        expect_b = [
+            "resolve_patient",
+            "search_policy",
+            "check_followup_rule",
+            "create_followup_task_draft",
+        ]
         ok &= check(seq_b == expect_b, f"工具序列={seq_b}\n       预期={expect_b}")
         ok &= check(
             seq_b.index("check_followup_rule") < seq_b.index("create_followup_task_draft")
-            if "create_followup_task_draft" in seq_b else False,
+            if "create_followup_task_draft" in seq_b
+            else False,
             "创建草稿排在合规校验之后（顺序约束生效）",
         )
         confirm_ev = next((e for e in ev_b if e.get("event") == "confirm_required"), None)
@@ -198,7 +219,9 @@ def main() -> int:
         ok &= check(True, f"运行前草稿 {len(ids_before)} 张（记录基线）")
 
         # 回放：逐轮日志
-        replay = c.get(f"/api/v1/agent/runs/{run_uid}", headers={"Authorization": f"Bearer {nurse}"}).json()
+        replay = c.get(
+            f"/api/v1/agent/runs/{run_uid}", headers={"Authorization": f"Bearer {nurse}"}
+        ).json()
         rounds = replay.get("rounds") or []
         ok &= check(len(rounds) >= 4, f"逐轮决策日志 {len(rounds)} 条")
         ok &= check(
@@ -210,12 +233,17 @@ def main() -> int:
             "每条日志都有耗时与结果摘要",
         )
         rule_round = next((r for r in rounds if r["tool"] == "check_followup_rule"), {})
-        ok &= check(bool((rule_round.get("result_digest") or "").find("passed") >= 0), "校验轮的结果摘要含 passed")
+        ok &= check(
+            bool((rule_round.get("result_digest") or "").find("passed") >= 0),
+            "校验轮的结果摘要含 passed",
+        )
         create_round = next((r for r in rounds if r["tool"] == "create_followup_task_draft"), {})
-        ok &= check(create_round.get("decision") == "confirm", f"创建轮 decision={create_round.get('decision')}")
+        ok &= check(
+            create_round.get("decision") == "confirm",
+            f"创建轮 decision={create_round.get('decision')}",
+        )
 
-        # 人工确认 → 落库
-        conf_id = (confirm_ev.get("data") or {}).get("confirmation_id") if confirm_ev else None
+        # 人工确认 → 落库（确认单 id 由服务端从 run_uid 反查，这里不需要带）
         conf = c.post(
             f"/api/v1/agent/runs/{run_uid}/confirm",
             headers={"Authorization": f"Bearer {nurse}"},
@@ -226,7 +254,9 @@ def main() -> int:
         draft_id = conf_body.get("draft_id")
         ok &= check(bool(draft_id), f"落库草稿 id={draft_id}")
 
-        draft = c.get(f"/api/v1/tasks/{draft_id}", headers={"Authorization": f"Bearer {nurse}"}).json()
+        draft = c.get(
+            f"/api/v1/tasks/{draft_id}", headers={"Authorization": f"Bearer {nurse}"}
+        ).json()
         ids_after = draft_ids()
         ok &= check(
             draft_id not in ids_before,
@@ -236,11 +266,14 @@ def main() -> int:
             ids_after - ids_before == {draft_id},
             f"确认后新增且仅新增这一张：{sorted(ids_after - ids_before)}",
         )
-        ok &= check(draft.get("status") == "draft", f"草稿状态={draft.get('status')}（AI 只能到 draft）")
+        ok &= check(
+            draft.get("status") == "draft", f"草稿状态={draft.get('status')}（AI 只能到 draft）"
+        )
         offsets = [i["offset_days"] for i in (draft.get("content") or {}).get("items", [])]
         ok &= check(offsets == [30, 90, 180], f"节点={offsets}（应来自制度 30/90/180）")
         ok &= check(
-            ((draft.get("content") or {}).get("ai") or {}).get("confirmed_via") == "agent_confirm_card",
+            ((draft.get("content") or {}).get("ai") or {}).get("confirmed_via")
+            == "agent_confirm_card",
             "草稿留痕：confirmed_via=agent_confirm_card",
         )
 
@@ -253,13 +286,21 @@ def main() -> int:
         ok &= check(again.status_code == 409, f"重复确认 HTTP {again.status_code}（应为 409）")
 
         # 越权确认 → 404
-        other = c.post(
+        # 注册一个「他人」账号：只为拿到一个不属于本 run 的登录态，响应本身不用
+        c.post(
             "/api/v1/auth/register",
-            json={"username": "traj_other", "password": args.password, "full_name": "他人", "role": "staff"},
+            json={
+                "username": "traj_other",
+                "password": args.password,
+                "full_name": "他人",
+                "role": "staff",
+            },
         )
-        other_tok = c.post(
-            "/api/v1/auth/login", json={"username": "traj_other", "password": args.password}
-        ).json().get("access_token", "")
+        other_tok = (
+            c.post("/api/v1/auth/login", json={"username": "traj_other", "password": args.password})
+            .json()
+            .get("access_token", "")
+        )
         if other_tok:
             denied = c.post(
                 f"/api/v1/agent/runs/{run_uid}/confirm",
@@ -272,9 +313,13 @@ def main() -> int:
         # 轨迹 C：红旗症状（评估 → 制度提示，不排普通随访）
         # ================================================================
         print("\n[C] 「患者说持续胸痛，需要怎么处理」")
-        sid_c = c.post("/api/v1/chat/sessions", headers={"Authorization": f"Bearer {nurse}"}, json={}).json()["id"]
+        sid_c = c.post(
+            "/api/v1/chat/sessions", headers={"Authorization": f"Bearer {nurse}"}, json={}
+        ).json()["id"]
         ev_c = sse_post(
-            c, "/api/v1/agent/chat", nurse,
+            c,
+            "/api/v1/agent/chat",
+            nurse,
             {"session_id": sid_c, "question": "患者说持续胸痛，需要怎么处理？"},
         )
         seq_c = tools_of(ev_c)
@@ -282,11 +327,21 @@ def main() -> int:
         ok &= check("create_followup_task_draft" not in seq_c, "红旗场景不生成普通随访草稿")
         done_c = done_of(ev_c)
         flags_c = done_c.get("flags") or {}
-        ok &= check(bool(flags_c.get("red_flag_high")), f"flags 已标记 red_flag_high={flags_c.get('red_flag_high')}")
+        ok &= check(
+            bool(flags_c.get("red_flag_high")),
+            f"flags 已标记 red_flag_high={flags_c.get('red_flag_high')}",
+        )
         answer_c = done_c.get("final_text") or ""
-        ok &= check(("主管医生" in answer_c) or ("急救" in answer_c), f"回答含处置动作：{answer_c[:60]}…")
-        run_c = c.get(f"/api/v1/agent/runs/{done_c.get('run_uid','')}", headers={"Authorization": f"Bearer {nurse}"}).json()
-        ok &= check(bool((run_c.get("route") or {}).get("risk_ticket")), "已签发 risk_ticket（可升级）")
+        ok &= check(
+            ("主管医生" in answer_c) or ("急救" in answer_c), f"回答含处置动作：{answer_c[:60]}…"
+        )
+        run_c = c.get(
+            f"/api/v1/agent/runs/{done_c.get('run_uid', '')}",
+            headers={"Authorization": f"Bearer {nurse}"},
+        ).json()
+        ok &= check(
+            bool((run_c.get("route") or {}).get("risk_ticket")), "已签发 risk_ticket（可升级）"
+        )
 
         # 三条轨迹的日志汇总，便于人工扫描
         print("\n[审计] 轨迹 B 的逐轮日志（工具 / 耗时 / 摘要）")

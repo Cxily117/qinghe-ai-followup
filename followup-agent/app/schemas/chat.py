@@ -1,4 +1,5 @@
 """问答相关 DTO。"""
+
 from pydantic import BaseModel, Field
 
 

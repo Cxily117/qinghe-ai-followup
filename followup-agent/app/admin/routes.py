@@ -12,6 +12,7 @@
   - 登录了但不是 admin → 403 页面，明确告诉医护"请使用问答端"
   Cookie 里的 JWT 与 API 的 Bearer 是同一格式，角色仍以数据库为准。
 """
+
 from __future__ import annotations
 
 import logging
@@ -65,7 +66,7 @@ async def _page_user(request: Request, db: AsyncSession) -> User | None:
     try:
         payload = decode_token(token)
         user_id = int(payload.get("sub") or 0)
-    except Exception:  # 过期/伪造/格式错一律当未登录，不区分（避免探测账号）
+    except Exception:  # noqa: BLE001 —— 过期/伪造/格式错一律当未登录，不区分（避免探测账号）
         return None
     user = await db.get(User, user_id)
     if user is None or user.status != "active":
@@ -122,9 +123,7 @@ def _render(
         "err": request.query_params.get("err"),
         "now": datetime.now(),
     }
-    return templates.TemplateResponse(
-        request, template, {**base, **ctx}, status_code=status_code
-    )
+    return templates.TemplateResponse(request, template, {**base, **ctx}, status_code=status_code)
 
 
 def _back(path: str, *, msg: str | None = None, err: str | None = None) -> RedirectResponse:
@@ -307,10 +306,8 @@ async def patient_create(
 
 
 @router.post("/admin/patients/{patient_id}/status")
-async def patient_set_status(
-    request: Request, patient_id: int, db: DbDep, status: str = Form(...)
-):
-    user, blocked = await _guard(request, db)
+async def patient_set_status(request: Request, patient_id: int, db: DbDep, status: str = Form(...)):
+    _user, blocked = await _guard(request, db)
     if blocked:
         return blocked
     patient = await db.get(Patient, patient_id)
@@ -398,7 +395,7 @@ async def kb_upload(
         )
     except AppError as exc:
         return _back("/admin/kb", err=str(exc))
-    except Exception as exc:  # noqa: BLE001 —— 向量化失败等，页面要给可读原因
+    except Exception as exc:
         logger.exception("后台上传失败")
         return _back("/admin/kb", err=f"上传失败：{exc}")
 
@@ -442,7 +439,7 @@ async def kb_detail(request: Request, document_id: int, db: DbDep):
 
 @router.post("/admin/kb/{document_id}/publish")
 async def kb_publish(request: Request, document_id: int, db: DbDep):
-    user, blocked = await _guard(request, db)
+    _user, blocked = await _guard(request, db)
     if blocked:
         return blocked
     try:
@@ -455,7 +452,7 @@ async def kb_publish(request: Request, document_id: int, db: DbDep):
 
 @router.post("/admin/kb/{document_id}/archive")
 async def kb_archive(request: Request, document_id: int, db: DbDep):
-    user, blocked = await _guard(request, db)
+    _user, blocked = await _guard(request, db)
     if blocked:
         return blocked
     try:
@@ -468,7 +465,7 @@ async def kb_archive(request: Request, document_id: int, db: DbDep):
 
 @router.post("/admin/kb/{document_id}/delete")
 async def kb_delete(request: Request, document_id: int, db: DbDep):
-    user, blocked = await _guard(request, db)
+    _user, blocked = await _guard(request, db)
     if blocked:
         return blocked
     try:
@@ -520,8 +517,10 @@ async def _render_prompts(
     if v_param.isdigit():
         view_version = next((v for v in versions if v.version == int(v_param)), None)
 
-    body = draft_content if draft_content is not None else (
-        view_version.content if view_version else snapshot.text
+    body = (
+        draft_content
+        if draft_content is not None
+        else (view_version.content if view_version else snapshot.text)
     )
 
     return _render(
@@ -576,9 +575,7 @@ async def prompts_rollback(request: Request, name: str, db: DbDep, version: int 
     if blocked:
         return blocked
     try:
-        row = await prompt_service.rollback(
-            db, name=name, target_version=version, user_id=user.id
-        )
+        row = await prompt_service.rollback(db, name=name, target_version=version, user_id=user.id)
     except AppError as exc:
         return _back(f"/admin/prompts?name={name}", err=str(exc))
     return _back(
@@ -655,9 +652,7 @@ async def users_page(request: Request, db: DbDep):
     user, blocked = await _guard(request, db)
     if blocked:
         return blocked
-    rows = (
-        (await db.execute(select(User).order_by(User.id))).scalars().all()
-    )
+    rows = (await db.execute(select(User).order_by(User.id))).scalars().all()
     active_admins = sum(1 for u in rows if u.role == "admin" and u.status == "active")
     return _render(
         request,
@@ -682,7 +677,9 @@ async def user_set_role(request: Request, user_id: int, db: DbDep, role: str = F
     except AppError as exc:
         return _back("/admin/users", err=exc.message)
     label = "管理员" if role == "admin" else "医护"
-    return _back("/admin/users", msg=f"已将 {target.full_name or target.username} 的角色调整为{label}")
+    return _back(
+        "/admin/users", msg=f"已将 {target.full_name or target.username} 的角色调整为{label}"
+    )
 
 
 @router.post("/admin/users/{user_id}/status")
@@ -887,7 +884,7 @@ async def reports_page(request: Request, db: DbDep):
 @router.get("/admin/reports/summary.csv")
 async def reports_csv(request: Request, db: DbDep):
     """CSV 导出走后台 Cookie 鉴权：浏览器直接下载，不需要把 token 暴露给页面 JS。"""
-    user, blocked = await _guard(request, db)
+    _user, blocked = await _guard(request, db)
     if blocked:
         return blocked
 

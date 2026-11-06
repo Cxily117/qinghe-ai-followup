@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """清理冒烟/调试产生的测试账号与它们的会话数据（幂等，默认只报告不删）。
 
 为什么需要它：
@@ -25,6 +24,7 @@
     python scripts/cleanup_test_data.py --apply            # 真删
     python scripts/cleanup_test_data.py --apply --keep zhangwei
 """
+
 from __future__ import annotations
 
 import argparse
@@ -117,24 +117,32 @@ async def run(apply: bool, keep: tuple[str, ...], empty_sessions: bool) -> int:
             ("sessions", f"SELECT COUNT(*) FROM sessions WHERE user_id IN ({qmarks})"),
             (
                 "messages",
-                "SELECT COUNT(*) FROM messages WHERE session_id IN "
-                f"(SELECT id FROM sessions WHERE user_id IN ({qmarks}))",
+                (
+                    "SELECT COUNT(*) FROM messages WHERE session_id IN "
+                    f"(SELECT id FROM sessions WHERE user_id IN ({qmarks}))"
+                ),
             ),
             ("agent_runs", f"SELECT COUNT(*) FROM agent_runs WHERE user_id IN ({qmarks})"),
             (
                 "agent_tool_calls",
-                "SELECT COUNT(*) FROM agent_tool_calls WHERE run_id IN "
-                f"(SELECT id FROM agent_runs WHERE user_id IN ({qmarks}))",
+                (
+                    "SELECT COUNT(*) FROM agent_tool_calls WHERE run_id IN "
+                    f"(SELECT id FROM agent_runs WHERE user_id IN ({qmarks}))"
+                ),
             ),
             (
                 "agent_confirmations",
-                "SELECT COUNT(*) FROM agent_confirmations WHERE run_id IN "
-                f"(SELECT id FROM agent_runs WHERE user_id IN ({qmarks}))",
+                (
+                    "SELECT COUNT(*) FROM agent_confirmations WHERE run_id IN "
+                    f"(SELECT id FROM agent_runs WHERE user_id IN ({qmarks}))"
+                ),
             ),
             (
                 "chat_audit_marks",
-                "SELECT COUNT(*) FROM chat_audit_marks WHERE marked_by IN "
-                f"({qmarks}) OR revoked_by IN ({qmarks})",
+                (
+                    "SELECT COUNT(*) FROM chat_audit_marks WHERE marked_by IN "
+                    f"({qmarks}) OR revoked_by IN ({qmarks})"
+                ),
             ),
             (
                 "followup_task_drafts",
@@ -173,12 +181,8 @@ async def run(apply: bool, keep: tuple[str, ...], empty_sessions: bool) -> int:
                 ),
                 params,
             )
-            await db.execute(
-                text(f"DELETE FROM sessions WHERE user_id IN ({qmarks})"), params
-            )
-            await db.execute(
-                text(f"DELETE FROM agent_runs WHERE user_id IN ({qmarks})"), params
-            )
+            await db.execute(text(f"DELETE FROM sessions WHERE user_id IN ({qmarks})"), params)
+            await db.execute(text(f"DELETE FROM agent_runs WHERE user_id IN ({qmarks})"), params)
             await db.execute(
                 text(
                     "DELETE FROM chat_audit_marks WHERE marked_by IN "
@@ -211,7 +215,9 @@ async def run(apply: bool, keep: tuple[str, ...], empty_sessions: bool) -> int:
             return 1
 
         left = (await db.execute(text("SELECT COUNT(*) FROM users"))).scalar_one()
-        print(f"\n✅ 已删除 {len(victims)} 个测试账号，剩余账号 {left} 个（可用管理员 {admins} 个）")
+        print(
+            f"\n✅ 已删除 {len(victims)} 个测试账号，剩余账号 {left} 个（可用管理员 {admins} 个）"
+        )
         return 0
 
 
@@ -219,9 +225,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="清理测试账号及其会话数据（幂等）")
     ap.add_argument("--apply", action="store_true", help="真正执行删除（默认只预演）")
     ap.add_argument("--keep", nargs="*", default=[], help="额外保留的登录名")
-    ap.add_argument(
-        "--empty-sessions", action="store_true", help="顺带清掉没有任何消息的空会话"
-    )
+    ap.add_argument("--empty-sessions", action="store_true", help="顺带清掉没有任何消息的空会话")
     args = ap.parse_args()
     keep = tuple(KEEP_DEFAULT) + tuple(args.keep)
     return asyncio.run(run(args.apply, keep, args.empty_sessions))

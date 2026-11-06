@@ -14,6 +14,7 @@
   切片数 > 1 万时，先用 pgvector 的 HNSW 索引召回 top50，再对候选做 BM25 重排；
   当前实现保留在 `_score_all` 里，替换这一个函数即可。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -131,7 +132,11 @@ def _score_all(
             )
         vector_scores[i] = float(vec @ query_vec)
 
-    return alpha * _minmax(vector_scores) + (1 - alpha) * _minmax(bm25_scores), bm25_scores, vector_scores
+    return (
+        alpha * _minmax(vector_scores) + (1 - alpha) * _minmax(bm25_scores),
+        bm25_scores,
+        vector_scores,
+    )
 
 
 async def retrieve(

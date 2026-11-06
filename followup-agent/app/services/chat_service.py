@@ -6,9 +6,10 @@
     这是「AI 当时依据什么说的」唯一可举证的地方；
   - 会话归属强校验：任何按 id 访问的地方都带 user_id 条件，防越权读别人的问诊记录。
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,9 +30,7 @@ async def get_session_for_user(
 ) -> ChatSession | None:
     return (
         await db.execute(
-            select(ChatSession).where(
-                ChatSession.id == session_id, ChatSession.user_id == user_id
-            )
+            select(ChatSession).where(ChatSession.id == session_id, ChatSession.user_id == user_id)
         )
     ).scalar_one_or_none()
 
@@ -50,13 +49,17 @@ async def get_or_create_session(
 
 async def list_sessions(db: AsyncSession, user_id: int, limit: int = 50) -> list[ChatSession]:
     return (
-        await db.execute(
-            select(ChatSession)
-            .where(ChatSession.user_id == user_id)
-            .order_by(ChatSession.updated_at.desc(), ChatSession.id.desc())
-            .limit(limit)
+        (
+            await db.execute(
+                select(ChatSession)
+                .where(ChatSession.user_id == user_id)
+                .order_by(ChatSession.updated_at.desc(), ChatSession.id.desc())
+                .limit(limit)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
 
 async def list_messages(
@@ -66,13 +69,17 @@ async def list_messages(
     if await get_session_for_user(db, session_id, user_id) is None:
         return None
     rows = (
-        await db.execute(
-            select(Message)
-            .where(Message.session_id == session_id)
-            .order_by(Message.id.asc())
-            .limit(limit)
+        (
+            await db.execute(
+                select(Message)
+                .where(Message.session_id == session_id)
+                .order_by(Message.id.asc())
+                .limit(limit)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 
@@ -112,7 +119,7 @@ async def append_message(
     # 顺带刷新会话的 updated_at，让会话列表按最近活跃排序
     session = await db.get(ChatSession, session_id)
     if session is not None:
-        session.updated_at = datetime.now(timezone.utc)
+        session.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(message)
     return message

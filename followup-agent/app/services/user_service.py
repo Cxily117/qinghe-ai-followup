@@ -14,6 +14,7 @@
   2. 系统必须始终保留至少一名可用（active）管理员 —— 最后一个 admin 不能降级或停用；
   3. 目标必须存在且参数合法 —— 非法值在入口就拒绝，不落库。
 """
+
 from __future__ import annotations
 
 from sqlalchemy import func, select
@@ -30,9 +31,7 @@ STATUSES = ("active", "disabled")
 async def count_active_admins(db: AsyncSession) -> int:
     """当前可用的管理员数量——「最后一个 admin 不可降级/停用」的判断依据。"""
     result = await db.execute(
-        select(func.count())
-        .select_from(User)
-        .where(User.role == "admin", User.status == "active")
+        select(func.count()).select_from(User).where(User.role == "admin", User.status == "active")
     )
     return int(result.scalar_one())
 
@@ -78,9 +77,7 @@ async def set_status(db: AsyncSession, target: User, status: str, operator: User
     return target
 
 
-async def reset_password(
-    db: AsyncSession, target: User, new_password: str, operator: User
-) -> User:
+async def reset_password(db: AsyncSession, target: User, new_password: str, operator: User) -> User:
     """管理员重置他人密码（忘记密码 / 交接账号时用）。
 
     权限边界：
@@ -110,9 +107,7 @@ async def ensure_admin(
       2. 冒烟测试 —— 新约束下注册接口不再发 admin，测试账号由这里直接落库。
     已存在则重置密码、提升为 admin 并激活（不重复插入）。
     """
-    user = (
-        await db.execute(select(User).where(User.username == username))
-    ).scalar_one_or_none()
+    user = (await db.execute(select(User).where(User.username == username))).scalar_one_or_none()
     if user is None:
         user = User(
             username=username,

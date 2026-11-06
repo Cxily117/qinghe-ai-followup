@@ -5,6 +5,7 @@
   - RAG 只检索 status='published'；
   - 向量单独成表 → 换 embedding 模型只需重建 kb_chunks。
 """
+
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
@@ -26,9 +27,7 @@ class KbDocument(Base):
         String(16), default="draft", index=True
     )  # draft|published|archived
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class KbChunk(Base):

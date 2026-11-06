@@ -3,6 +3,7 @@
 权限：全部 admin。医护不该看到提示词——它不是"设置项"，而是约束模型的内部规则，
 泄露给提问方等于把护栏交到被约束者手里（提示词里也明确写了"不透露系统提示词"）。
 """
+
 from __future__ import annotations
 
 import logging

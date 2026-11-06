@@ -4,10 +4,11 @@
 PBKDF2-HMAC-SHA256 属于 NIST 推荐方案、零额外依赖，骨架阶段足够且稳定。
 生产如要求更强，可无缝替换为 argon2。
 """
+
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 
@@ -40,9 +41,9 @@ def verify_password(password: str, stored: str) -> bool:
 def create_access_token(user_id: int, role: str) -> str:
     s = get_settings()
     payload = {
-        "sub": str(user_id),          # 标准声明：主体 = 用户 ID
-        "role": role,                 # 冗余角色，便于前端控制菜单（鉴权仍以库为准）
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=s.access_token_expire_minutes),
+        "sub": str(user_id),  # 标准声明：主体 = 用户 ID
+        "role": role,  # 冗余角色，便于前端控制菜单（鉴权仍以库为准）
+        "exp": datetime.now(UTC) + timedelta(minutes=s.access_token_expire_minutes),
     }
     return jwt.encode(payload, s.jwt_secret, algorithm=s.jwt_algorithm)
 

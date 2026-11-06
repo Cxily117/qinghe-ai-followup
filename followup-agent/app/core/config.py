@@ -2,15 +2,14 @@
 
 阶段 2 起所有配置集中在 Settings，业务代码不直接读 os.environ。
 """
+
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "随访智能体系统"
     api_v1_prefix: str = "/api/v1"
@@ -21,8 +20,8 @@ class Settings(BaseSettings):
 
     # ---- 限流（上线清单 C2）----
     rate_limit_enabled: bool = True
-    rate_limit_user_per_min: int = 30   # 单账号每分钟问答次数
-    rate_limit_ip_per_min: int = 120    # 单 IP 每分钟问答次数（兜底）
+    rate_limit_user_per_min: int = 30  # 单账号每分钟问答次数
+    rate_limit_ip_per_min: int = 120  # 单 IP 每分钟问答次数（兜底）
     rate_limit_login_per_min: int = 20  # 单 IP 每分钟登录尝试（防撞库）
     rate_limit_allow_loopback: bool = True  # 本机回环豁免，便于开发与冒烟
 

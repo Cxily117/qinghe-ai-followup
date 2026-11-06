@@ -18,6 +18,7 @@
 不归档什么：`chat_audit_marks`（人工质控标记）与 `prompt_templates`（提示词版本）
 是合规证据，只统计不删除；要删必须人工决定并留书面记录。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -31,9 +32,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlalchemy import text  # noqa: E402
+from sqlalchemy import text
 
-from app.core.database import SessionLocal  # noqa: E402
+from app.core.database import SessionLocal
 
 ARCHIVE_DIR = Path(__file__).resolve().parent.parent / "data" / "archive"
 
@@ -41,14 +42,18 @@ ARCHIVE_DIR = Path(__file__).resolve().parent.parent / "data" / "archive"
 TABLES = [
     (
         "agent_tool_calls",
-        "SELECT * FROM agent_tool_calls WHERE run_id IN "
-        "(SELECT id FROM agent_runs WHERE created_at < :cutoff) ORDER BY id",
+        (
+            "SELECT * FROM agent_tool_calls WHERE run_id IN "
+            "(SELECT id FROM agent_runs WHERE created_at < :cutoff) ORDER BY id"
+        ),
     ),
     ("agent_runs", "SELECT * FROM agent_runs WHERE created_at < :cutoff ORDER BY id"),
     (
         "messages",
-        "SELECT * FROM messages WHERE session_id IN "
-        "(SELECT id FROM sessions WHERE created_at < :cutoff) ORDER BY id",
+        (
+            "SELECT * FROM messages WHERE session_id IN "
+            "(SELECT id FROM sessions WHERE created_at < :cutoff) ORDER BY id"
+        ),
     ),
     ("sessions", "SELECT * FROM sessions WHERE created_at < :cutoff ORDER BY id"),
 ]
@@ -109,7 +114,9 @@ async def run(days: int, apply: bool) -> int:
             ),
             {"cutoff": cutoff},
         )
-        await db.execute(text("DELETE FROM agent_runs WHERE created_at < :cutoff"), {"cutoff": cutoff})
+        await db.execute(
+            text("DELETE FROM agent_runs WHERE created_at < :cutoff"), {"cutoff": cutoff}
+        )
         await db.execute(
             text(
                 "DELETE FROM messages WHERE session_id IN "
@@ -117,7 +124,9 @@ async def run(days: int, apply: bool) -> int:
             ),
             {"cutoff": cutoff},
         )
-        await db.execute(text("DELETE FROM sessions WHERE created_at < :cutoff"), {"cutoff": cutoff})
+        await db.execute(
+            text("DELETE FROM sessions WHERE created_at < :cutoff"), {"cutoff": cutoff}
+        )
         await db.commit()
 
         manifest = ARCHIVE_DIR / "manifest.jsonl"

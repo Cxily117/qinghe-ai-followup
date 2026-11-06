@@ -4,20 +4,22 @@
   - 在线：asyncpg/aiosqlite 异步引擎执行迁移
   - 离线：alembic upgrade head --sql 只生成 SQL（用于审查 PostgreSQL DDL）
 """
+
 import asyncio
 import os
 import sys
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
+
+from alembic import context
 
 # 保证能 import 到 app 包（alembic 从项目根目录运行）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.core.config import get_settings  # noqa: E402
-from app.models import Base  # noqa: E402  必须导入以注册全部表
+from app.core.config import get_settings
+from app.models import Base
 
 config = context.config
 if config.config_file_name is not None:
@@ -40,8 +42,7 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata,
-                      compare_type=True)
+    context.configure(connection=connection, target_metadata=target_metadata, compare_type=True)
     with context.begin_transaction():
         context.run_migrations()
 

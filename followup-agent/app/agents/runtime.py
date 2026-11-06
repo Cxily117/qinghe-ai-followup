@@ -15,6 +15,7 @@
    内嵌 patient_id / rule_sha 解决"张冠李戴"和"拿旧版制度建草稿"。
    票据只由服务端在工具返回里给出，模型无法凭空造出一张能验过的票。
 """
+
 from __future__ import annotations
 
 import base64
@@ -23,8 +24,8 @@ import hmac
 import json
 import secrets
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from app.core.config import get_settings
 from app.core.errors import AppError
@@ -44,7 +45,7 @@ class ToolSpec:
     schema: dict
     category: str
     # 解锁条件：返回 True 才下发给模型。参数是 RunState。
-    unlock: Callable[["RunState"], bool] = lambda state: True
+    unlock: Callable[[RunState], bool] = lambda state: True
     # 是否需要票据，以及需要哪种（write 类工具由 handler 再验一次，双保险）
     ticket_kind: str = ""
     # 单轮最多调用几次（None = 不单独限制，受 agent_max_steps 总闸约束）
@@ -169,8 +170,8 @@ def verify_ticket(
 
     try:
         payload = json.loads(_unb64(body))
-    except Exception:  # 签名对但结构坏：同样视为无效票
-        raise AppError("AGENT_TICKET_INVALID")
+    except Exception:  # noqa: BLE001 —— 签名对但结构坏：同样视为无效票
+        raise AppError("AGENT_TICKET_INVALID") from None
 
     if payload.get("k") != kind:
         raise AppError("AGENT_TICKET_INVALID", "票据类型不匹配，请重新校验")
@@ -222,5 +223,5 @@ async def consume_ticket(
         await db.flush()
     except IntegrityError:
         await db.rollback()
-        raise AppError("TICKET_REPLAYED")
+        raise AppError("TICKET_REPLAYED") from None
     return payload

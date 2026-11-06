@@ -12,14 +12,15 @@ SSE 事件（原有问答事件之外）：
   confirm_required ★ 写操作被闸门拦下：下发草稿内容，等医护点确认
 回答仍然是 delta / replace / done，前端渲染逻辑不用重写。
 """
+
 from __future__ import annotations
 
 import logging
 import re
 import secrets
 import time
+from collections.abc import AsyncIterator
 from datetime import datetime, timedelta
-from typing import AsyncIterator
 
 from app.agents import handlers
 from app.agents.gateway.base import get_llm
@@ -50,6 +51,7 @@ def redact_question(text: str) -> str:
     text = _PHONE_RE.sub(lambda m: m.group(0)[:3] + "*" * 4 + m.group(0)[-4:], text)
     text = _IDCARD_RE.sub(lambda m: m.group(0)[:4] + "*" * 10 + m.group(0)[-4:], text)
     return text
+
 
 # 工具名 → 执行体。8 个工具全部在这里注册；
 # 能不能被模型看见由 runtime/tools 的解锁条件决定，不在这里裁剪。
@@ -110,9 +112,7 @@ async def stream_agent_events(
 
     async with SessionLocal() as db:  # 流式响应必须自建会话：yield 依赖会提前退出
         try:
-            session = await chat_service.get_or_create_session(
-                db, user_id, session_id, question
-            )
+            session = await chat_service.get_or_create_session(db, user_id, session_id, question)
         except LookupError as exc:
             yield {"type": "error", "code": "SESSION_NOT_FOUND", "message": str(exc)}
             return
@@ -145,11 +145,11 @@ async def stream_agent_events(
             question=question,
         )
         prompt = await prompt_service.get_active(db, "agent_supervisor")
-        messages: list[dict] = (
-            [{"role": "system", "content": prompt.text}]
-            + history
-            + [{"role": "user", "content": question}]
-        )
+        messages: list[dict] = [
+            {"role": "system", "content": prompt.text},
+            *history,
+            {"role": "user", "content": question},
+        ]
 
         llm = get_llm()
         model_name = getattr(llm, "model", s.llm_chat_model)
@@ -260,7 +260,7 @@ async def stream_agent_events(
             )
 
         merged_flags = dict(flags)
-        merged_flags.update({f: True for f in state.flags})
+        merged_flags.update(dict.fromkeys(state.flags, True))
         merged_flags["tool_steps"] = len(outcome.rounds)
         if pending_confirm:
             merged_flags["awaiting_confirm"] = True
@@ -401,7 +401,12 @@ async def decide_confirmation(
             run.session_id,
             "assistant",
             "已取消，本次没有写入任何随访任务草稿。",
-            meta={"agent": {"run_uid": run_uid, "confirm": {"id": confirmation.id, "status": "cancelled"}}},
+            meta={
+                "agent": {
+                    "run_uid": run_uid,
+                    "confirm": {"id": confirmation.id, "status": "cancelled"},
+                }
+            },
         )
         return {"run_uid": run_uid, "status": "cancelled", "confirmation_id": confirmation.id}
 

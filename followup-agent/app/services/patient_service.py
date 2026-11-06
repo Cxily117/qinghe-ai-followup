@@ -9,6 +9,7 @@
   同名患者张冠李戴，后面所有随访节点都会挂到错误的人身上。
   宁可让医护多打一次住院号，也不能让模型"猜一个"。
 """
+
 from __future__ import annotations
 
 import json
@@ -49,9 +50,7 @@ async def ensure_seed(db: AsyncSession) -> int:
         logger.warning("患者种子文件读取失败：%s", SEED_FILE, exc_info=True)
         return 0
 
-    existing = set(
-        (await db.execute(select(Patient.patient_ref))).scalars().all()
-    )
+    existing = set((await db.execute(select(Patient.patient_ref))).scalars().all())
     added = 0
     for row in rows:
         ref = (row.get("ref") or "").strip()
@@ -115,9 +114,7 @@ async def find_exact(db: AsyncSession, raw: str) -> tuple[Patient | None, list[P
         rows = (
             (
                 await db.execute(
-                    select(Patient).where(
-                        Patient.name == key, Patient.status == "active"
-                    )
+                    select(Patient).where(Patient.name == key, Patient.status == "active")
                 )
             )
             .scalars()
@@ -135,7 +132,9 @@ async def list_page(
     count_stmt = select(func.count()).select_from(Patient)
     if q:
         like = f"%{q.strip()}%"
-        cond = or_(Patient.patient_ref.ilike(like), Patient.name.ilike(like), Patient.dept.ilike(like))
+        cond = or_(
+            Patient.patient_ref.ilike(like), Patient.name.ilike(like), Patient.dept.ilike(like)
+        )
         stmt = stmt.where(cond)
         count_stmt = count_stmt.where(cond)
 
@@ -145,9 +144,7 @@ async def list_page(
     items = (
         (
             await db.execute(
-                stmt.order_by(Patient.id.desc())
-                .offset((page - 1) * page_size)
-                .limit(page_size)
+                stmt.order_by(Patient.id.desc()).offset((page - 1) * page_size).limit(page_size)
             )
         )
         .scalars()
@@ -165,9 +162,7 @@ async def list_page(
 async def stats(db: AsyncSession) -> dict:
     total = (await db.execute(select(func.count()).select_from(Patient))).scalar_one()
     seeded = (
-        await db.execute(
-            select(func.count()).select_from(Patient).where(Patient.source == "seed")
-        )
+        await db.execute(select(func.count()).select_from(Patient).where(Patient.source == "seed"))
     ).scalar_one()
     return {"total": total, "seeded": seeded, "manual": total - seeded}
 

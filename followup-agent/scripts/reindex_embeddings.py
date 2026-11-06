@@ -15,6 +15,7 @@
     - 按批（embed 内部已分批）一次性提交，失败整体回滚，不会出现"重建了一半"；
     - 写入前校验维度与 EMBED_DIM 一致，避免把 2048 维塞进 vector(1024)。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,12 +25,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlalchemy import select  # noqa: E402
+from sqlalchemy import select
 
-from app.agents.gateway.embedding import get_embedder  # noqa: E402
-from app.core.config import get_settings  # noqa: E402
-from app.core.database import SessionLocal  # noqa: E402
-from app.models.kb import KbChunk, KbDocument  # noqa: E402
+from app.agents.gateway.embedding import get_embedder
+from app.core.config import get_settings
+from app.core.database import SessionLocal
+from app.models.kb import KbChunk, KbDocument
 
 
 async def main(all_docs: bool, dry_run: bool) -> int:
@@ -66,7 +67,7 @@ async def main(all_docs: bool, dry_run: bool) -> int:
             print(f"❌ 维度不符：模型返回 {vectors.shape[1]}，配置要求 {s.embed_dim}")
             return 3
 
-        for (chunk, _doc), vec in zip(rows, vectors):
+        for (chunk, _doc), vec in zip(rows, vectors, strict=True):
             chunk.embedding = vec.tolist()
 
         await db.commit()

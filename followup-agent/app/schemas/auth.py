@@ -1,4 +1,5 @@
 """认证相关 DTO。"""
+
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field

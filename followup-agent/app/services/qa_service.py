@@ -10,6 +10,7 @@
   路由注入的 db 会话（那时它已经 close 了）。这里改为在生成器内部自建会话，
   生命周期与流对齐，写库一定发生在 finally 之前。
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,7 +27,9 @@ from app.services import chat_service, prompt_service
 logger = logging.getLogger(__name__)
 
 # 知识库为空（或尚未发布任何文档）时的固定话术：不调模型，直接拒答——省一次费用
-EMPTY_KB_ANSWER = "知识库中暂无已发布的随访制度文档，无法回答该问题。请联系管理员上传并发布制度后再试。"
+EMPTY_KB_ANSWER = (
+    "知识库中暂无已发布的随访制度文档，无法回答该问题。请联系管理员上传并发布制度后再试。"
+)
 
 
 def _meta(
@@ -126,9 +129,7 @@ async def answer_once(
         citation_detail=[h.to_citation(n) for n, h in enumerate(hits, 1) if n in citations],
     )
     meta["usage"] = result.usage
-    message = await chat_service.append_message(
-        db, session.id, "assistant", answer, meta=meta
-    )
+    message = await chat_service.append_message(db, session.id, "assistant", answer, meta=meta)
 
     return {
         "session_id": session.id,
@@ -142,9 +143,7 @@ async def answer_once(
     }
 
 
-async def stream_events(
-    *, user_id: int, question: str, session_id: int | None = None
-):
+async def stream_events(*, user_id: int, question: str, session_id: int | None = None):
     """流式问答：逐条 yield 事件字典，由路由层包成 SSE。
 
     事件类型：
@@ -159,9 +158,7 @@ async def stream_events(
 
     async with SessionLocal() as db:  # 自建会话，生命周期与流对齐
         try:
-            session = await chat_service.get_or_create_session(
-                db, user_id, session_id, question
-            )
+            session = await chat_service.get_or_create_session(db, user_id, session_id, question)
         except LookupError as exc:
             yield {"type": "error", "code": "SESSION_NOT_FOUND", "message": str(exc)}
             return
@@ -215,7 +212,7 @@ async def stream_events(
             async for delta in llm.stream(messages):
                 chunks.append(delta)
                 yield {"type": "delta", "text": delta}
-        except Exception as exc:  # noqa: BLE001 —— 上游任何异常都要落库留痕
+        except Exception as exc:
             logger.exception("LLM 流式调用失败")
             partial = "".join(chunks)
             if partial:
@@ -267,9 +264,7 @@ async def stream_events(
                 flags=flags,
                 answer_chars=len(answer),
                 streamed=True,
-                citation_detail=[
-                    h.to_citation(n) for n, h in enumerate(hits, 1) if n in citations
-                ],
+                citation_detail=[h.to_citation(n) for n, h in enumerate(hits, 1) if n in citations],
             ),
         )
 

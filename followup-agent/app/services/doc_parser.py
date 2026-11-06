@@ -6,6 +6,7 @@ PDF 只做**文本层抽取**（pypdf），不做 OCR。这是个刻意的边界
   这种"看起来成功"的失败，比直接报错危险得多。
 所以抽不到文字时必须明确报错，让管理员去补文字版。
 """
+
 from __future__ import annotations
 
 import logging
@@ -30,7 +31,7 @@ def _decode_text(raw: bytes) -> str:
     try:
         return raw.decode("gb18030")  # GBK 的超集，兼容性更好
     except UnicodeDecodeError:
-        raise AppError("UNSUPPORTED_FORMAT", "无法识别文件编码，请另存为 UTF-8 后再上传")
+        raise AppError("UNSUPPORTED_FORMAT", "无法识别文件编码，请另存为 UTF-8 后再上传") from None
 
 
 def _extract_pdf(raw: bytes) -> str:
@@ -46,7 +47,7 @@ def _extract_pdf(raw: bytes) -> str:
         raise
     except Exception as exc:  # 损坏、乱码、非 PDF 伪装扩展名都落在这里
         logger.warning("PDF 解析失败：%s", exc)
-        raise AppError("PDF_PARSE_ERROR")
+        raise AppError("PDF_PARSE_ERROR") from exc
 
     content = "\n\n".join(t.strip() for t in texts if t.strip())
     if len(content) < PDF_MIN_TEXT:

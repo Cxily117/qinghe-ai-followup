@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """D3–D4 冒烟测试：一条命令验证「上传→发布→检索→问答→溯源」整条链路。
 
 用法（服务需已启动）：
@@ -11,6 +10,7 @@
   4. 校验：SSE 流式事件完整、message.meta 里有 citations、会话可回溯
 退出码 0 表示全部通过，非 0 表示有断言失败——可直接挂到 CI。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -46,7 +46,6 @@ SAMPLE_DOC = """# 出院后随访管理制度（试行）
 ## 四、本条用于自动化校验
 本制度的内部校验编号为 {marker}，对应出院后第 5 天加做一次电话复核。
 """
-
 
 
 def check(condition: bool, message: str) -> bool:
@@ -90,17 +89,26 @@ def main() -> int:
         # 注册默认角色必须是医护：即使请求里带 role="admin" 也要被 schema 直接拒绝（422）
         reg_admin_try = c.post(
             "/api/v1/auth/register",
-            json={"username": staff_username, "password": "Passw0rd!",
-                  "full_name": staff_username, "role": "admin"},
+            json={
+                "username": staff_username,
+                "password": "Passw0rd!",
+                "full_name": staff_username,
+                "role": "admin",
+            },
         )
-        ok &= check(reg_admin_try.status_code == 422, f"注册带 role=admin → HTTP {reg_admin_try.status_code}（拒绝自注册管理员）")
+        ok &= check(
+            reg_admin_try.status_code == 422,
+            f"注册带 role=admin → HTTP {reg_admin_try.status_code}（拒绝自注册管理员）",
+        )
         reg = c.post(
             "/api/v1/auth/register",
             json={"username": staff_username, "password": "Passw0rd!", "full_name": staff_username},
         )
         nurse_user = reg.json() if reg.status_code == 201 else {}
-        ok &= check(reg.status_code == 201 and nurse_user.get("role") == "staff",
-                    f"注册默认角色=staff（HTTP {reg.status_code}）")
+        ok &= check(
+            reg.status_code == 201 and nurse_user.get("role") == "staff",
+            f"注册默认角色=staff（HTTP {reg.status_code}）",
+        )
         nurse_id = nurse_user.get("id")
         admin = c.post(
             "/api/v1/auth/login",
@@ -191,7 +199,9 @@ def main() -> int:
         ).json()
         assistant = [m for m in msgs if m["role"] == "assistant" and m["meta"]]
         meta = assistant[-1]["meta"] if assistant else {}
-        ok &= check(bool(meta.get("prompt_version")), f"prompt_version={meta.get('prompt_version')}")
+        ok &= check(
+            bool(meta.get("prompt_version")), f"prompt_version={meta.get('prompt_version')}"
+        )
         ok &= check("citations" in meta, f"citations={meta.get('citations')}")
 
         # ---------------- D5：任务草稿（AI 只能到 draft） ----------------
@@ -207,17 +217,29 @@ def main() -> int:
         )
         draft = gen.json()
         ok &= check(gen.status_code == 201, f"HTTP {gen.status_code}")
-        ok &= check(draft.get("status") == "draft", f"status={draft.get('status')}（客户端传 confirmed 也必须无效）")
+        ok &= check(
+            draft.get("status") == "draft",
+            f"status={draft.get('status')}（客户端传 confirmed 也必须无效）",
+        )
         ok &= check(draft.get("patient_ref") == patient, f"patient_ref={draft.get('patient_ref')}")
         items = (draft.get("content") or {}).get("items") or []
-        ok &= check([i["offset_days"] for i in items] == [3, 7, 30], f"节点={[i['offset_days'] for i in items]}")
-        ok &= check(items and items[0].get("due_date") == "2026-10-23", f"首个节点日期={items[0].get('due_date') if items else None}")
+        ok &= check(
+            [i["offset_days"] for i in items] == [3, 7, 30],
+            f"节点={[i['offset_days'] for i in items]}",
+        )
+        ok &= check(
+            items and items[0].get("due_date") == "2026-10-23",
+            f"首个节点日期={items[0].get('due_date') if items else None}",
+        )
         ok &= check(
             str(draft.get("scheduled_at") or "").startswith("2026-10-23T09:00"),
             f"scheduled_at={draft.get('scheduled_at')}（应归一到 09:00）",
         )
         ai_meta = (draft.get("content") or {}).get("ai") or {}
-        ok &= check(bool(ai_meta.get("prompt_version")) and bool(ai_meta.get("model")), f"ai meta={ {k: ai_meta.get(k) for k in ('model', 'prompt_version', 'latency_ms')} }")
+        ok &= check(
+            bool(ai_meta.get("prompt_version")) and bool(ai_meta.get("model")),
+            f"ai meta={ {k: ai_meta.get(k) for k in ('model', 'prompt_version', 'latency_ms')} }",
+        )
 
         print("[10] 缺患者标识 → 422（不编造住院号）")
         bad = c.post(
@@ -225,7 +247,10 @@ def main() -> int:
             headers={"Authorization": f"Bearer {staff}"},
             json={"question": "出院后第 7 天打电话随访一次"},
         )
-        ok &= check(bad.status_code == 422, f"HTTP {bad.status_code} detail={bad.json().get('detail', '')[:60]}")
+        ok &= check(
+            bad.status_code == 422,
+            f"HTTP {bad.status_code} detail={bad.json().get('detail', '')[:60]}",
+        )
 
         print("[11] 非归属人不得确认 → 404")
         other = f"smoke_other_{suffix}"
@@ -251,10 +276,16 @@ def main() -> int:
             json={"note": "护士已核对出院日与随访节点"},
         )
         confirmed = conf.json()
-        ok &= check(conf.status_code == 200 and confirmed.get("status") == "confirmed", f"status={confirmed.get('status')}")
-        ok &= check(bool(confirmed.get("confirmed_by")), f"confirmed_by={confirmed.get('confirmed_by')}")
         ok &= check(
-            ((confirmed.get("content") or {}).get("confirm") or {}).get("by") == f"smoke_nurse_{suffix}",
+            conf.status_code == 200 and confirmed.get("status") == "confirmed",
+            f"status={confirmed.get('status')}",
+        )
+        ok &= check(
+            bool(confirmed.get("confirmed_by")), f"confirmed_by={confirmed.get('confirmed_by')}"
+        )
+        ok &= check(
+            ((confirmed.get("content") or {}).get("confirm") or {}).get("by")
+            == f"smoke_nurse_{suffix}",
             "确认人姓名已落库（可追溯）",
         )
 
@@ -306,15 +337,23 @@ def main() -> int:
         )
 
         print("[15] 引用原文接口（登录可读，仅 published）")
-        detail = c.get(f"/api/v1/kb/documents/{doc['id']}/chunks", headers={"Authorization": f"Bearer {admin}"}).json()
+        detail = c.get(
+            f"/api/v1/kb/documents/{doc['id']}/chunks", headers={"Authorization": f"Bearer {admin}"}
+        ).json()
         first_chunk = detail["items"][0]["chunk_id"]
-        full = c.get(f"/api/v1/kb/citations/{first_chunk}", headers={"Authorization": f"Bearer {staff}"}).json()
+        full = c.get(
+            f"/api/v1/kb/citations/{first_chunk}", headers={"Authorization": f"Bearer {staff}"}
+        ).json()
         ok &= check(
             full.get("doc_title") == title and len(full.get("content", "")) > 20,
             f"医护可读引用原文：{full.get('doc_title')}（{len(full.get('content', ''))} 字）",
         )
-        missing = c.get("/api/v1/kb/citations/999999", headers={"Authorization": f"Bearer {staff}"}).json()
-        ok &= check(missing.get("code") == "CHUNK_NOT_FOUND", f"不存在的切片 → {missing.get('code')}")
+        missing = c.get(
+            "/api/v1/kb/citations/999999", headers={"Authorization": f"Bearer {staff}"}
+        ).json()
+        ok &= check(
+            missing.get("code") == "CHUNK_NOT_FOUND", f"不存在的切片 → {missing.get('code')}"
+        )
 
         print("[16] 前端托管：GET / 与静态资源")
         index = c.get("/")
@@ -323,24 +362,40 @@ def main() -> int:
             f"GET / → {index.status_code}（单页 HTML）",
         )
         js = c.get("/static/app.js")
-        ok &= check(js.status_code == 200 and "consumeSSE" in js.text, f"/static/app.js → {js.status_code}")
+        ok &= check(
+            js.status_code == 200 and "consumeSSE" in js.text, f"/static/app.js → {js.status_code}"
+        )
 
         # ---------------- 阶段 3：管理后台（RBAC / 提示词 / 审计 / 删除语义） ----------------
         print("[17] 接口级 RBAC：医护调管理接口 → 403")
         admin_h = {"Authorization": f"Bearer {admin}"}
         staff_h = {"Authorization": f"Bearer {staff}"}
-        ok &= check(c.get("/api/v1/prompts", headers=staff_h).status_code == 403, "GET /prompts（staff）→ 403")
-        ok &= check(c.get("/api/v1/audit/sessions", headers=staff_h).status_code == 403, "GET /audit/sessions（staff）→ 403")
-        ok &= check(c.get("/api/v1/prompts", headers=admin_h).status_code == 200, "GET /prompts（admin）→ 200")
+        ok &= check(
+            c.get("/api/v1/prompts", headers=staff_h).status_code == 403,
+            "GET /prompts（staff）→ 403",
+        )
+        ok &= check(
+            c.get("/api/v1/audit/sessions", headers=staff_h).status_code == 403,
+            "GET /audit/sessions（staff）→ 403",
+        )
+        ok &= check(
+            c.get("/api/v1/prompts", headers=admin_h).status_code == 200,
+            "GET /prompts（admin）→ 200",
+        )
 
         print("[18] 提示词保存校验：缺关键约束 → 422，合法 → 新版本立即生效")
         bad = c.put(
             "/api/v1/prompts/policy_qa",
             headers=admin_h,
-            json={"content": "你是随访助手。" + "请用简体中文回答问题，条理清晰，语气友好。" * 6, "note": "smoke"},
+            json={
+                "content": "你是随访助手。" + "请用简体中文回答问题，条理清晰，语气友好。" * 6,
+                "note": "smoke",
+            },
         )
-        ok &= check(bad.status_code == 422 and bad.json().get("code") == "PROMPT_MISSING_RULE",
-                    f"缺「引用/拒答」约束 → {bad.status_code} {bad.json().get('code')}")
+        ok &= check(
+            bad.status_code == 422 and bad.json().get("code") == "PROMPT_MISSING_RULE",
+            f"缺「引用/拒答」约束 → {bad.status_code} {bad.json().get('code')}",
+        )
         before = c.get("/api/v1/prompts/policy_qa", headers=admin_h).json()["active_version"]
         legal = (
             "你是院内随访规范助手，只能依据检索到的随访制度条文作答；制度无对应内容时必须明确回复"
@@ -353,21 +408,27 @@ def main() -> int:
             json={"content": legal, "note": f"smoke {suffix}"},
         )
         new_version = saved.json().get("version")
-        ok &= check(saved.status_code == 200 and new_version == before + 1,
-                    f"保存 → v{before} → v{new_version}")
+        ok &= check(
+            saved.status_code == 200 and new_version == before + 1,
+            f"保存 → v{before} → v{new_version}",
+        )
         # 立即生效：下一次回答的 meta 必须指向新版本（带正文指纹）
         ask2 = c.post(
             "/api/v1/chat/ask",
             headers={"Authorization": f"Bearer {staff}"},
             json={"question": f"提示词版本校验 {suffix}：骨科术后第 5 天做什么？"},
         ).json()
-        ok &= check(str(ask2.get("prompt_version", "")).startswith(f"db:v{new_version}#"),
-                    f"回答 meta.prompt_version={ask2.get('prompt_version')}（应为 db:v{new_version}#…）")
+        ok &= check(
+            str(ask2.get("prompt_version", "")).startswith(f"db:v{new_version}#"),
+            f"回答 meta.prompt_version={ask2.get('prompt_version')}（应为 db:v{new_version}#…）",
+        )
 
         print("[19] 删除语义：已发布 → 409；归档 → 退出检索；归档后可删")
         del_pub = c.delete(f"/api/v1/kb/documents/{doc['id']}", headers=admin_h)
-        ok &= check(del_pub.status_code == 409 and del_pub.json().get("code") == "DOC_HAS_BEEN_PUBLISHED",
-                    f"删除已发布 → {del_pub.status_code} {del_pub.json().get('code')}")
+        ok &= check(
+            del_pub.status_code == 409 and del_pub.json().get("code") == "DOC_HAS_BEEN_PUBLISHED",
+            f"删除已发布 → {del_pub.status_code} {del_pub.json().get('code')}",
+        )
         arch = c.post(f"/api/v1/kb/documents/{doc['id']}/archive", headers=admin_h).json()
         ok &= check(arch.get("status") == "archived", f"归档 → {arch.get('status')}")
         # 归档后这条制度的条文不应再被检索命中
@@ -376,7 +437,15 @@ def main() -> int:
             headers={"Authorization": f"Bearer {staff}"},
             json={"question": f"{marker} 这份文件对出院后第 5 天的规定是什么？"},
         ).json()
-        ok &= check(marker not in (after_archive.get("answer") or ""), "归档后不再命中该文档条文")
+        # 判据用「文档独有结论 + 引用列表」，不用 marker 字符串：
+        # 模型拒答时会复述问题里的编号，那不代表它命中了条文，用字符串匹配会误报。
+        archived_cites = after_archive.get("citations") or []
+        ok &= check(
+            "加做的一次电话复核" not in (after_archive.get("answer") or "")
+            and all(x.get("document_id") != doc["id"] for x in archived_cites),
+            "归档后不再命中该文档条文"
+            f"（引用={[(x['n'], x['document_id']) for x in archived_cites]}）",
+        )
         del_arch = c.delete(f"/api/v1/kb/documents/{doc['id']}", headers=admin_h)
         ok &= check(del_arch.status_code == 200, f"删除已归档 → {del_arch.status_code}")
 
@@ -384,7 +453,10 @@ def main() -> int:
         flagged = c.get(
             "/api/v1/audit/sessions", headers=admin_h, params={"only_flagged": "true"}
         ).json()
-        ok &= check(flagged["total"] >= 1 and bool(flagged["items"]), f"自动预筛疑似 → {flagged['total']} 个会话")
+        ok &= check(
+            flagged["total"] >= 1 and bool(flagged["items"]),
+            f"自动预筛疑似 → {flagged['total']} 个会话",
+        )
         target_sid = flagged["items"][0]["session_id"]
         mark = c.post(
             f"/api/v1/audit/sessions/{target_sid}/marks",
@@ -395,27 +467,45 @@ def main() -> int:
         marked = c.get(
             "/api/v1/audit/sessions", headers=admin_h, params={"only_marked": "true"}
         ).json()
-        ok &= check(any(i["session_id"] == target_sid for i in marked["items"]), "只看已标记 → 包含刚标记的会话")
+        ok &= check(
+            any(i["session_id"] == target_sid for i in marked["items"]),
+            "只看已标记 → 包含刚标记的会话",
+        )
         revoke = c.post(f"/api/v1/audit/marks/{mark['id']}/revoke", headers=admin_h).json()
         ok &= check(bool(revoke.get("revoked_at")), "撤销标记 → 记录 revoked_at")
         still = c.get(
             "/api/v1/audit/sessions", headers=admin_h, params={"only_marked": "true"}
         ).json()
-        ok &= check(all(i["session_id"] != target_sid for i in still["items"]), "撤销后不再计入已标记")
+        ok &= check(
+            all(i["session_id"] != target_sid for i in still["items"]), "撤销后不再计入已标记"
+        )
 
         print("[21] 后台页面：登录 / 越权 / 页面可达")
         login_page = c.get("/admin/login")
-        ok &= check(login_page.status_code == 200 and "管理员登录" in login_page.text, "GET /admin/login → 200")
         ok &= check(
-            c.post("/admin/login", data={"username": f"smoke_nurse_{suffix}", "password": "Passw0rd!"}).status_code == 303,
+            login_page.status_code == 200 and "管理员登录" in login_page.text,
+            "GET /admin/login → 200",
+        )
+        ok &= check(
+            c.post(
+                "/admin/login", data={"username": f"smoke_nurse_{suffix}", "password": "Passw0rd!"}
+            ).status_code
+            == 303,
             "医护账号登录后台 → 303 拒绝（提示仅可使用问答）",
         )
         c.cookies.set("qh_admin", staff)  # 模拟令牌被写入：页面级兜底必须 403
         ok &= check(c.get("/admin").status_code == 403, "staff cookie 访问 /admin → 403 页面")
-        ok &= check(c.get("/admin/users").status_code == 403, "staff cookie 访问 /admin/users → 403 页面")
+        ok &= check(
+            c.get("/admin/users").status_code == 403, "staff cookie 访问 /admin/users → 403 页面"
+        )
         c.cookies.clear()
-        ok &= check(c.post("/admin/login", data={"username": f"smoke_admin_{suffix}", "password": "Passw0rd!"}).status_code == 303,
-                    "管理员登录 → 303 写 cookie")
+        ok &= check(
+            c.post(
+                "/admin/login", data={"username": f"smoke_admin_{suffix}", "password": "Passw0rd!"}
+            ).status_code
+            == 303,
+            "管理员登录 → 303 写 cookie",
+        )
         c.cookies.set("qh_admin", admin)
         for path in ("/admin", "/admin/kb", "/admin/prompts", "/admin/audit", "/admin/users"):
             page = c.get(path)
@@ -436,24 +526,22 @@ def main() -> int:
         )
         # 授予：医护 → 管理员；回收：管理员 → 医护
         promote = c.post(f"/admin/users/{nurse_id}/role", data={"role": "admin"})
-        ok &= check(promote.status_code == 303 and "管理员" in _loc(promote),
-                    "授权：医护 → 管理员")
+        ok &= check(promote.status_code == 303 and "管理员" in _loc(promote), "授权：医护 → 管理员")
         # 刚授权的角色以数据库为准：旧 token 里的 role 不作数——医护 token 立刻能进接口级 admin 校验？
         # （require_admin 每次查库，因此 nurse 的新 token 才有 admin 权限；旧 token 仍是 staff —— 不测这个，只验页面）
         demote = c.post(f"/admin/users/{nurse_id}/role", data={"role": "staff"})
-        ok &= check(demote.status_code == 303 and "医护" in _loc(demote),
-                    "回收：管理员 → 医护")
+        ok &= check(demote.status_code == 303 and "医护" in _loc(demote), "回收：管理员 → 医护")
         # 防呆 2 + 启停闭环：停用账号立即无法登录，启用后恢复
         disable = c.post(f"/admin/users/{other_id}/status", data={"status": "disabled"})
-        login_disabled = c.post("/api/v1/auth/login",
-                                json={"username": other, "password": "Passw0rd!"})
+        login_disabled = c.post(
+            "/api/v1/auth/login", json={"username": other, "password": "Passw0rd!"}
+        )
         ok &= check(
             disable.status_code == 303 and login_disabled.status_code == 403,
             f"停用账号 → 立即无法登录（HTTP {login_disabled.status_code}）",
         )
         enable = c.post(f"/admin/users/{other_id}/status", data={"status": "active"})
-        login_back = c.post("/api/v1/auth/login",
-                            json={"username": other, "password": "Passw0rd!"})
+        login_back = c.post("/api/v1/auth/login", json={"username": other, "password": "Passw0rd!"})
         ok &= check(
             enable.status_code == 303 and login_back.status_code == 200,
             "重新启用后可正常登录",
@@ -501,13 +589,15 @@ def main() -> int:
                 return hit.patient_ref if hit else None
 
         ok &= check(asyncio.run(_resolve(smoke_ref)) == smoke_ref, "在册患者可被查患者工具命中")
-        ok &= check(asyncio.run(_resolve("ZY0000000")) is None, "不存在的住院号 → 查不到（found=false）")
+        ok &= check(
+            asyncio.run(_resolve("ZY0000000")) is None, "不存在的住院号 → 查不到（found=false）"
+        )
 
         # 停用后必须查不到：这是「这个人不该再被随访」的落地，而不是只在页面上变灰
         victim = c.get(f"/admin/patients?q={smoke_ref}").text
         import re as _re
 
-        m = _re.search(r'/admin/patients/(\d+)/status', victim)
+        m = _re.search(r"/admin/patients/(\d+)/status", victim)
         if m:
             off = c.post(f"/admin/patients/{m.group(1)}/status", data={"status": "inactive"})
             ok &= check(off.status_code == 303, "停用患者 → 303")
@@ -528,7 +618,6 @@ def main() -> int:
 
         asyncio.run(_cleanup_patient())
 
-
         print("[22] 智能体 SSE：事件完整、delta 只发一次（护栏改写走 replace，不得叠加）")
         patient_id = "ZY2026001"  # 患者目录（patients 表）里的演示患者，由启动播种写入
         agent_events: list[dict] = []
@@ -546,19 +635,30 @@ def main() -> int:
                     continue
                 agent_events.append(json.loads(line[6:]))
         types = [e["type"] for e in agent_events]
-        ok &= check({"session", "run", "step", "citations", "done"} <= set(types), f"事件序列={types}")
-        ok &= check(types.count("delta") + types.count("replace") == 1,
-                    f"最终答案只发一个事件（delta={types.count('delta')} replace={types.count('replace')}）")
+        ok &= check(
+            {"session", "run", "step", "citations", "done"} <= set(types), f"事件序列={types}"
+        )
+        ok &= check(
+            types.count("delta") + types.count("replace") == 1,
+            f"最终答案只发一个事件（delta={types.count('delta')} replace={types.count('replace')}）",
+        )
         done_ev = next(e for e in agent_events if e["type"] == "done")
         run_uid = done_ev.get("run_uid", "")
         final_text = done_ev.get("final_text", "")
         half = len(final_text) // 2
-        ok &= check(len(final_text) > 20 and final_text[:half] != final_text[half:2 * half],
-                    "final_text 无首尾重复（回答重复回归）")
-        ok &= check(bool(done_ev.get("flags", {}).get("tool_steps")), f"flags.tool_steps={done_ev.get('flags', {}).get('tool_steps')}")
+        ok &= check(
+            len(final_text) > 20 and final_text[:half] != final_text[half : 2 * half],
+            "final_text 无首尾重复（回答重复回归）",
+        )
+        ok &= check(
+            bool(done_ev.get("flags", {}).get("tool_steps")),
+            f"flags.tool_steps={done_ev.get('flags', {}).get('tool_steps')}",
+        )
 
         print("[23] 智能体回放：逐轮决策日志 + 审计脱敏（不留患者原始住院号）")
-        replay = c.get(f"/api/v1/agent/runs/{run_uid}", headers={"Authorization": f"Bearer {staff}"}).json()
+        replay = c.get(
+            f"/api/v1/agent/runs/{run_uid}", headers={"Authorization": f"Bearer {staff}"}
+        ).json()
         tools_used = [t["tool"] for t in replay.get("tool_calls", [])]
         ok &= check(bool(tools_used), f"工具调用链={tools_used}")
         # 安全不变式：这是个纯咨询问题，任何情况下都不得出现写工具。
@@ -571,11 +671,14 @@ def main() -> int:
         )
         rounds = replay.get("rounds") or []
         ok &= check(
-            len(rounds) >= 1 and all(r.get("decision") and r.get("latency_ms") is not None for r in rounds),
+            len(rounds) >= 1
+            and all(r.get("decision") and r.get("latency_ms") is not None for r in rounds),
             f"逐轮日志 {len(rounds)} 条，含 decision/耗时",
         )
         args_blob = json.dumps(replay.get("tool_calls", []), ensure_ascii=False)
-        ok &= check(patient_id not in args_blob, "审计 args_redacted 不含原始住院号（PHI 脱敏生效）")
+        ok &= check(
+            patient_id not in args_blob, "审计 args_redacted 不含原始住院号（PHI 脱敏生效）"
+        )
 
         # S2：运行记录入库的问题原文也必须脱敏（回放接口不返回 question，直连库校验；
         # 对远程 base-url 跑冒烟时这段自动跳过，不影响主流程）
@@ -598,7 +701,9 @@ def main() -> int:
             print(f"  ⚠️ 跳过库内校验：{exc}")
 
         print("[24] 智能体回放越权：他人 run → 404（不暴露存在性）")
-        other_run = c.get(f"/api/v1/agent/runs/{run_uid}", headers={"Authorization": f"Bearer {other_token}"})
+        other_run = c.get(
+            f"/api/v1/agent/runs/{run_uid}", headers={"Authorization": f"Bearer {other_token}"}
+        )
         ok &= check(other_run.status_code == 404, f"他人回放 → {other_run.status_code}")
 
         # ---------------- D6：质控报表 ----------------
@@ -623,11 +728,15 @@ def main() -> int:
             f"tools 含 search_policy（共 {len(rep['tools'])} 个工具）",
         )
         ok &= check(
-            c.get("/api/v1/reports/summary", headers=admin_h, params={"days": 9999}).status_code == 422,
+            c.get("/api/v1/reports/summary", headers=admin_h, params={"days": 9999}).status_code
+            == 422,
             "days=9999 → 422（窗口钳制 1-365 生效）",
         )
         ok &= check(
-            c.get("/api/v1/reports/summary", headers={"Authorization": f"Bearer {staff}"}).status_code == 403,
+            c.get(
+                "/api/v1/reports/summary", headers={"Authorization": f"Bearer {staff}"}
+            ).status_code
+            == 403,
             "staff 访问报表 → 403（RBAC）",
         )
 
@@ -696,9 +805,7 @@ def main() -> int:
 
         # 管理员重置他人密码（护士忘记密码的真实场景）
         c.cookies.set("qh_admin", admin)
-        reset = c.post(
-            f"/admin/users/{pwd_id}/password", data={"new_password": "ResetPass9"}
-        )
+        reset = c.post(f"/admin/users/{pwd_id}/password", data={"new_password": "ResetPass9"})
         reset_login = c.post(
             "/api/v1/auth/login", json={"username": pwd_user, "password": "ResetPass9"}
         )
@@ -718,9 +825,7 @@ def main() -> int:
 
         # 医护绕过页面直接打接口 → 页面级闸门 403，且密码没被改掉
         c.cookies.set("qh_admin", staff)
-        hacked = c.post(
-            f"/admin/users/{pwd_id}/password", data={"new_password": "Hack12345"}
-        )
+        hacked = c.post(f"/admin/users/{pwd_id}/password", data={"new_password": "Hack12345"})
         still_reset = c.post(
             "/api/v1/auth/login", json={"username": pwd_user, "password": "ResetPass9"}
         )

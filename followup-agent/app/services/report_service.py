@@ -17,6 +17,7 @@
 没有可移植的取值语法；院内数据规模下「窗口内 assistant 消息」是几千行量级，
 一次取 meta 列聚合即可。数据量上来后再换成 PG jsonb 路径，口径不变）。
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -59,15 +60,18 @@ async def _qa_metrics(db: AsyncSession, since: datetime) -> dict:
     而「给了内容却没引用」才是要盯的质量问题——它意味着模型可能在编。
     """
     rows = (
-        await db.execute(
-            select(Message.meta)
-            .where(
-                Message.role == "assistant",
-                Message.meta.is_not(None),
-                Message.created_at >= since,
+        (
+            await db.execute(
+                select(Message.meta).where(
+                    Message.role == "assistant",
+                    Message.meta.is_not(None),
+                    Message.created_at >= since,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     total = len(rows)
     refusal = no_citation = red_flag = rewritten = 0
@@ -107,9 +111,7 @@ async def _qa_metrics(db: AsyncSession, since: datetime) -> dict:
         "red_flag_questions": red_flag,
         "avg_latency_ms": int(sum(latencies) / len(latencies)) if latencies else 0,
         "models": dict(sorted(models.items(), key=lambda kv: -kv[1])[:5]),
-        "prompt_versions": dict(
-            sorted(prompt_versions.items(), key=lambda kv: -kv[1])[:5]
-        ),
+        "prompt_versions": dict(sorted(prompt_versions.items(), key=lambda kv: -kv[1])[:5]),
     }
 
 
@@ -121,10 +123,10 @@ async def _draft_metrics(db: AsyncSession, since: datetime) -> dict:
     这比「数量不同」更准——人把第 7 天改成第 14 天、数量没变，也算修改。
     """
     rows = (
-        await db.execute(
-            select(FollowupTaskDraft).where(FollowupTaskDraft.created_at >= since)
-        )
-    ).scalars().all()
+        (await db.execute(select(FollowupTaskDraft).where(FollowupTaskDraft.created_at >= since)))
+        .scalars()
+        .all()
+    )
 
     total = len(rows)
     by_status = {"draft": 0, "confirmed": 0, "cancelled": 0}
@@ -246,10 +248,14 @@ async def _agent_metrics(db: AsyncSession, since: datetime) -> dict:
     )
 
     confirms = (
-        await db.execute(
-            select(AgentConfirmation.status).where(AgentConfirmation.created_at >= since)
+        (
+            await db.execute(
+                select(AgentConfirmation.status).where(AgentConfirmation.created_at >= since)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     confirm_dist: dict[str, int] = {}
     for s in confirms:
         confirm_dist[s] = confirm_dist.get(s, 0) + 1
@@ -300,11 +306,16 @@ async def _tool_metrics(db: AsyncSession, since: datetime) -> list[dict]:
 async def _mark_metrics(db: AsyncSession, since: datetime) -> dict:
     """人工审计标记：质检工作量的直接体现（只统计未撤销的）。"""
     rows = (
-        await db.execute(
-            select(ChatAuditMark.level)
-            .where(ChatAuditMark.created_at >= since, ChatAuditMark.revoked_at.is_(None))
+        (
+            await db.execute(
+                select(ChatAuditMark.level).where(
+                    ChatAuditMark.created_at >= since, ChatAuditMark.revoked_at.is_(None)
+                )
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     dist: dict[str, int] = {}
     for level in rows:
         dist[level] = dist.get(level, 0) + 1

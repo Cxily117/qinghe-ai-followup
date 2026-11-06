@@ -9,12 +9,13 @@
   2. 失败重试只针对「可重试错误」（超时/连接失败/429/5xx），避免把用户输入错误重试放大；
   3. usage 有就回传、没有就 None——不假装有数据。
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
 import httpx
 
@@ -206,7 +207,9 @@ class OpenAICompatibleProvider(LLMProvider):
 
         status, data, text = await self._post_json(url, body)
         if status in TOOL_UNSUPPORTED_STATUS:
-            logger.warning("上游拒绝 tools 字段（%s），降级为 JSON 输出模式：%s", status, text[:200])
+            logger.warning(
+                "上游拒绝 tools 字段（%s），降级为 JSON 输出模式：%s", status, text[:200]
+            )
             return await self._chat_json_fallback(messages, tools, temperature, started)
         if status >= 400:
             raise RuntimeError(f"LLM 工具调用失败 {status}: {text[:300]}")
@@ -251,14 +254,15 @@ class OpenAICompatibleProvider(LLMProvider):
         """
         fn = tools[0]["function"]
         schema_hint = json.dumps(fn["parameters"], ensure_ascii=False)
-        patched = list(messages) + [
+        patched = [
+            *messages,
             {
                 "role": "system",
                 "content": (
                     "上游不支持工具调用。请只输出一个 JSON 对象，字段遵循以下 JSON Schema；"
                     "不要输出解释文字，不要输出代码块标记。\n" + schema_hint
                 ),
-            }
+            },
         ]
         url = f"{self.base_url}/chat/completions"
         body = self._payload(patched, temperature, stream=False)

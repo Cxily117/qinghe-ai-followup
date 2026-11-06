@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """模型 Key 一键体检：换 Key、改模型、报「大模型连接失败」时先跑这个。
 
 为什么要有它：
@@ -17,6 +16,7 @@
 
 注意：脚本会真实消耗几 token 的额度（一次 chat + 一次 embedding，可忽略不计）。
 """
+
 from __future__ import annotations
 
 import argparse

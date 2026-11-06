@@ -8,6 +8,7 @@
   同名文档再次上传 → version 自动 +1；发布新版时把旧版置为 archived。
   旧版切片继续留在库里（审计可追溯），只是不再参与检索。
 """
+
 from __future__ import annotations
 
 import logging
@@ -119,21 +120,27 @@ async def create_document(
     await db.commit()
     await db.refresh(doc)
 
-    logger.info("文档入库完成：id=%s title=%s version=%s chunks=%s", doc.id, title, doc.version, len(chunks))
+    logger.info(
+        "文档入库完成：id=%s title=%s version=%s chunks=%s", doc.id, title, doc.version, len(chunks)
+    )
     return doc, len(chunks)
 
 
 async def publish_document(db: AsyncSession, doc: KbDocument) -> KbDocument:
     """把文档置为 published；同名旧版自动 archived（同一时点只有一版生效）。"""
     stale = (
-        await db.execute(
-            select(KbDocument).where(
-                KbDocument.title == doc.title,
-                KbDocument.id != doc.id,
-                KbDocument.status == "published",
+        (
+            await db.execute(
+                select(KbDocument).where(
+                    KbDocument.title == doc.title,
+                    KbDocument.id != doc.id,
+                    KbDocument.status == "published",
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for old in stale:
         old.status = "archived"
         logger.info("旧版本归档：id=%s version=%s", old.id, old.version)
@@ -146,13 +153,17 @@ async def publish_document(db: AsyncSession, doc: KbDocument) -> KbDocument:
 
 async def list_chunks(db: AsyncSession, document_id: int, limit: int = 200) -> list[KbChunk]:
     return (
-        await db.execute(
-            select(KbChunk)
-            .where(KbChunk.document_id == document_id)
-            .order_by(KbChunk.chunk_index.asc())
-            .limit(limit)
+        (
+            await db.execute(
+                select(KbChunk)
+                .where(KbChunk.document_id == document_id)
+                .order_by(KbChunk.chunk_index.asc())
+                .limit(limit)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
 
 async def count_published_chunks(db: AsyncSession) -> int:
@@ -191,17 +202,15 @@ async def list_documents_page(
     if q:
         stmt = stmt.where(KbDocument.title.contains(q.strip()))
 
-    total = int(
-        (await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar() or 0
-    )
+    total = int((await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar() or 0)
     rows = list(
         (
             await db.execute(
-                stmt.order_by(KbDocument.id.desc())
-                .offset((page - 1) * page_size)
-                .limit(page_size)
+                stmt.order_by(KbDocument.id.desc()).offset((page - 1) * page_size).limit(page_size)
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
 
     counts = dict(
@@ -213,7 +222,7 @@ async def list_documents_page(
     )
     for row in rows:
         # 挂在 ORM 实例上的临时属性，模板直接读 doc.chunk_count
-        setattr(row, "chunk_count", int(counts.get(row.id, 0)))
+        row.chunk_count = int(counts.get(row.id, 0))
 
     return {
         "items": rows,

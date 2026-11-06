@@ -3,6 +3,7 @@
 关键取舍：PostgreSQL 用 pgvector 的 Vector(1024) 做 ANN 检索；
 开发态 SQLite 无此类型，降级为 JSON（只存不检，够 D1–D2 建表与联调）。
 """
+
 import sqlalchemy as sa
 from sqlalchemy.orm import DeclarativeBase
 

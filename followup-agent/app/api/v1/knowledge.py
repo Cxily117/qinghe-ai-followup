@@ -6,6 +6,7 @@
   - 已发布文档不允许直接删除，只能归档下架 —— 历史回答的引用要能点开看原文；
   - 原文落盘留档（file_path），切片之外还留着"当时上传的文件本体"。
 """
+
 from __future__ import annotations
 
 import logging
@@ -47,7 +48,9 @@ def _doc_out(doc: KbDocument, chunks: int | None = None) -> dict:
 async def list_documents(
     admin: AdminUser,
     db: DbDep,
-    status_filter: str | None = Query(default=None, alias="status", description="draft|published|archived"),
+    status_filter: str | None = Query(
+        default=None, alias="status", description="draft|published|archived"
+    ),
     q: str | None = Query(default=None, description="标题关键词"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),
@@ -81,7 +84,9 @@ async def upload_document(
     if ext not in SUPPORTED_EXT:
         raise AppError("UNSUPPORTED_FORMAT")
     if doc_type not in ALLOWED_DOC_TYPES:
-        raise AppError("VALIDATION_ERROR", f"文档类型必须是 {'/'.join(sorted(ALLOWED_DOC_TYPES))} 之一")
+        raise AppError(
+            "VALIDATION_ERROR", f"文档类型必须是 {'/'.join(sorted(ALLOWED_DOC_TYPES))} 之一"
+        )
 
     raw = await file.read()
     if not raw:
@@ -109,11 +114,11 @@ async def upload_document(
         )
     except ValueError as exc:
         saved.unlink(missing_ok=True)
-        raise AppError("VALIDATION_ERROR", str(exc))
+        raise AppError("VALIDATION_ERROR", str(exc)) from exc
     except Exception as exc:  # 向量化失败（如 Key 没配）也要把落盘文件清掉
         saved.unlink(missing_ok=True)
         logger.exception("文档入库失败")
-        raise AppError("KB_UNAVAILABLE", f"文档入库失败：{exc}")
+        raise AppError("KB_UNAVAILABLE", f"文档入库失败：{exc}") from exc
 
     return {
         "id": doc.id,
@@ -130,7 +135,9 @@ async def upload_document(
 async def document_detail(document_id: int, admin: AdminUser, db: DbDep):
     doc = await knowledge_service.get_document(db, document_id)
     chunk_count = int(
-        (await db.execute(select(func.count(KbChunk.id)).where(KbChunk.document_id == doc.id))).scalar()
+        (
+            await db.execute(select(func.count(KbChunk.id)).where(KbChunk.document_id == doc.id))
+        ).scalar()
         or 0
     )
     return {
@@ -185,7 +192,9 @@ async def list_chunks(
 ):
     doc = await knowledge_service.get_document(db, document_id)
     total = int(
-        (await db.execute(select(func.count(KbChunk.id)).where(KbChunk.document_id == doc.id))).scalar()
+        (
+            await db.execute(select(func.count(KbChunk.id)).where(KbChunk.document_id == doc.id))
+        ).scalar()
         or 0
     )
     rows = list(
@@ -197,7 +206,9 @@ async def list_chunks(
                 .offset((page - 1) * page_size)
                 .limit(page_size)
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     return {
         "document_id": document_id,
