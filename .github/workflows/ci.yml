@@ -5,13 +5,13 @@ name: CI
 on:
   push:
     branches: [main]
-    paths: ["followup-agent/**", ".github/**"]
+    paths: ["src/**", ".github/**"]
   pull_request:
-    paths: ["followup-agent/**", ".github/**"]
+    paths: ["src/**", ".github/**"]
 
 defaults:
   run:
-    working-directory: followup-agent
+    working-directory: src
 
 jobs:
   quality:
@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: followup-agent/requirements*.txt
+          cache-dependency-path: src/requirements*.txt
 
       - name: 安装依赖
         run: pip install -r requirements-dev.txt

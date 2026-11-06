@@ -13,7 +13,7 @@ FastAPI（异步）+ SQLAlchemy 2.0 + Alembic + JWT + RAG + function calling + �
 ## 快速启动（开发态，SQLite 零依赖）
 
 ```bash
-cd followup-agent
+cd src
 pip install -r requirements.txt
 
 alembic upgrade head          # 建表
@@ -519,7 +519,7 @@ search_policy / 审计入参不含原始住院号 / **运行记录里的问题�
 ## 目录
 
 ```
-followup-agent/
+src/
 ├── web/                      # ★ 医护问答单页（index.html + static/{app.js,style.css}，无构建）
 ├── app/
 │   ├── main.py               # 挂载 web/ 与 admin/static、注册统一错误处理器、SSR 模板
