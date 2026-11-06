@@ -33,3 +33,10 @@ deploy-qinghe/
 # 数据库改动前的备份（含真实数据，绝不入库）
 *.db.bak-*
 *.db.bak
+
+# 代码质量工具的缓存与产物（本机生成，不入库）
+.ruff_cache/
+htmlcov/
+coverage.xml
+.coverage
+ci.db

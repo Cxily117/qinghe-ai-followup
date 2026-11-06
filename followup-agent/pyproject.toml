@@ -1,0 +1,67 @@
+# 工程配置中心：lint / format / test 的规则都写在这里，不靠"每个人本地习惯"。
+# 只放工具配置，不放运行依赖——依赖仍由 requirements.txt 管，避免两处维护。
+
+[tool.ruff]
+# 中文注释按字计宽，100 列比默认 88 更贴合本项目的实际排版
+line-length = 100
+target-version = "py311"
+extend-exclude = ["alembic/versions", "deploy-qinghe"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle 错误
+    "W",   # pycodestyle 警告
+    "F",   # pyflakes：未使用导入/变量、f-string 缺占位符
+    "I",   # isort：导入排序
+    "UP",  # pyupgrade：过时写法
+    "B",   # bugbear：易错写法（可变默认值、裸 raise 等）
+    "BLE", # 裸 except
+    "ISC", # 隐式字符串拼接（少个逗号会静默合并，是真实事故来源）
+    "C4",  # comprehension 简写
+    "RUF", # ruff 自有规则
+]
+ignore = [
+    # 中文项目：全角标点在字符串、注释里是正常排版，不是"混淆字符"
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    # 行宽由 formatter 负责；中文按字计宽，硬卡列数会把句子切碎
+    "E501",
+    # FastAPI 的 Depends()/Security() 必须写在参数默认值里，这是框架约定
+    "B008",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 脚本是运维工具：允许 print 直接输出给人看
+"scripts/*" = ["T201"]
+# 测试：断言就是它的工作
+"tests/*" = ["S101", "BLE001"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# 让 `from app.xxx import ...` 在测试里可用，不依赖 PYTHONPATH 环境变量
+pythonpath = ["."]
+# 异步用例不用每个都写 @pytest.mark.asyncio
+asyncio_mode = "auto"
+addopts = "-q --strict-markers"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "app/agents/gateway/mock_provider.py",  # 离线桩，不参与覆盖率口径
+    "app/agents/prompts/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]

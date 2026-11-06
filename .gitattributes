@@ -1,0 +1,15 @@
+# 行尾统一交给 git 管，避免 Windows 上编辑一次就产生"整文件重写"的假 diff。
+# 文本一律 LF；二进制不参与转换（否则图片/数据库会被改坏）。
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.docx binary
+*.pdf binary
+*.db binary
+*.genie binary
+
+# 这些文件在 Windows 工具链里必须是 CRLF
+*.bat text eol=crlf
+*.ps1 text eol=crlf

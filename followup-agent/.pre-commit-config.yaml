@@ -1,0 +1,22 @@
+# 提交前自动跑 lint 与格式化：让"格式问题"根本不进入评审环节。
+# 安装：python -m pip install -r requirements-dev.txt && pre-commit install
+# 手动全量跑：pre-commit run --all-files
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: ["--fix", "--exit-non-zero-on-fix"]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=800"]   # dev.db、图片、docx 不该混进代码提交
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        exclude: \.md$
+      - id: detect-private-key   # 防止把 Key/私钥写进代码
